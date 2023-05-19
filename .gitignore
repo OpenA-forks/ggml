@@ -4,6 +4,7 @@ build-*/
 
 compile_commands.json
 
+.vscode
 .exrc
 .cache
 .DS_Store
