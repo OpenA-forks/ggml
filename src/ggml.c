@@ -745,6 +745,9 @@ int32x4_t vcvtnq_s32_f32(float32x4_t v) {
 #endif
 #endif
 
+#if defined(__e2k__)
+#include "arch/e2k/ggml-e2k.h"
+#endif
 
 #define QK4_0 32
 typedef struct {
@@ -2319,6 +2322,8 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     }
 
     *s = hsum_float_4x4(acc_0, acc_1, acc_2, acc_3);
+#elif defined (ARCH_VEC_DOT_Q4_0_Q8_0)
+    *s = ARCH_VEC_DOT_Q4_0_Q8_0(nb, vx, vy);
 #else
     // scalar
     float sumf = 0.0;
@@ -3057,6 +3062,8 @@ static void ggml_vec_dot_q8_0_q8_0(const int n, float * restrict s, const void *
     }
 
     *s = hsum_float_8(acc);
+#elif defined (ARCH_VEC_DOT_Q8_0_Q8_0)
+    *s = ARCH_VEC_DOT_Q8_0_Q8_0(nb, vx, vy);
 #else
     // scalar
     float sumf = 0.0;
