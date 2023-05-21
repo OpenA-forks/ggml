@@ -48,7 +48,8 @@
 #define __e2k_v__ __iset__
 
 
-#define _ONES_ 0x0001000100010001LL
+#define _ONES_  0x0001000100010001LL
+#define _MABS_ ~0x8000000080000000LL
 
 
 /*
