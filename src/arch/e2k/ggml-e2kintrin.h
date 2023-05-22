@@ -69,9 +69,20 @@ typedef __v2di __vd;
 # define __e2k_vmadd_u8_i16  __builtin_e2k_qpmaddubsh
 # define __e2k_vhadd_i32     __builtin_e2k_qphaddw
 # define __e2k_vpadd_i32     __builtin_e2k_qpaddw
+# define __e2k_vmerge        __builtin_e2k_qpmerge
 
 /* Horisontal sum i16x8 vector pairs with i32x4 vector output */
 # define __e2k_vhsat_i16_i32(s1) __builtin_e2k_qpmaddh(s1, __builtin_e2k_qppackdl(_ONES_,_ONES_))
+/* Remove sign from 32x4 (int/float) vector numbers */
+# define __e2k_vabs_i32f(s1) __builtin_e2k_qpand(s1, __builtin_e2k_qppackdl(_MABS_,_MABS_))
+
+/* Compares two f32x4:
+ * les - `<=`
+ * lts - `<`
+ * eqs - `==`
+ * neqs - `!=`
+*/
+# define __e2k_vfcmp(PAT, s1, s2) __builtin_e2k_qpfcmp##PAT(s1, s2)
 
 /* Pack high parts of operands into one striped vector
     B{15..8} ~ A{15..8} -> {A15 B14 ... A1 B0} */
@@ -114,6 +125,17 @@ typedef __di __vd;
 // B{3..0} ~ A{3..0} -> {A7 B6 ... A1 B0} 
 # define __e2k_vnpck_Lb  __builtin_e2k_punpcklbh
 # define __e2k_vpadd_i32 __builtin_e2k_paddw
+# define __e2k_vmerge    __builtin_e2k_pmerge
+/* Remove sign from 32x2 (int/float) vector numbers */
+# define __e2k_vabs_i32f(s1) __builtin_e2k_pandd(s1, _MABS_)
+
+/* Compares two f32x2:
+ * les - `<=`
+ * lts - `<`
+ * eqs - `==`
+ * neqs - `!=`
+*/
+# define __e2k_vfcmp(PAT, s1, s2) __builtin_e2k_pfcmp##PAT(s1, s2)
 
 /*
     Splits i8x8 vector by even/odd bytes in to two i16x4:

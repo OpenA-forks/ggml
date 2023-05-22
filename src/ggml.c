@@ -835,7 +835,16 @@ static void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * r
 }
 
 static void quantize_row_q4_0(const float * restrict x, void * restrict y, int k) {
+
+    assert(k % QK4_0 == 0);
+
+    const int nb = k / QK4_0;
+
+#if defined(ARCH_QUANTIZE_ROW_Q4_0)
+    ARCH_QUANTIZE_ROW_Q4_0(nb, x, y);
+#else
     quantize_row_q4_0_reference(x, y, k);
+#endif
 }
 
 static void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * restrict y, int k) {
@@ -1122,6 +1131,8 @@ static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int 
         _mm_storeu_si128((__m128i *)(y[i].qs + 16), ni4);
 #endif
     }
+#elif defined(ARCH_QUANTIZE_ROW_Q8_0)
+    ARCH_QUANTIZE_ROW_Q8_0(nb, x, vy);
 #else
     // scalar
     quantize_row_q8_0_reference(x, y, k);
