@@ -49,7 +49,7 @@
 
 
 #define _ONES_  0x0001000100010001LL
-#define _MABS_ ~0x8000000080000000LL
+#define _FABS_ ~0x8000000080000000LL
 
 
 /*
@@ -65,6 +65,7 @@
 */
 typedef __v2di __vd;
 
+# define __e2k_vmax_f32      __builtin_e2k_qpfmaxs
 # define __e2k_vsign_i8      __builtin_e2k_qpsignb
 # define __e2k_vmadd_u8_i16  __builtin_e2k_qpmaddubsh
 # define __e2k_vhadd_i32     __builtin_e2k_qphaddw
@@ -72,9 +73,40 @@ typedef __v2di __vd;
 # define __e2k_vmerge        __builtin_e2k_qpmerge
 
 /* Horisontal sum i16x8 vector pairs with i32x4 vector output */
-# define __e2k_vhsat_i16_i32(s1) __builtin_e2k_qpmaddh(s1, __builtin_e2k_qppackdl(_ONES_,_ONES_))
-/* Remove sign from 32x4 (int/float) vector numbers */
-# define __e2k_vabs_i32f(s1) __builtin_e2k_qpand(s1, __builtin_e2k_qppackdl(_MABS_,_MABS_))
+# define __e2k_vhsat_i16_i32(s1) __builtin_e2k_qpmaddh(s1,\
+                                 __builtin_e2k_qppackdl(_ONES_,_ONES_))
+/* Remove sign from f32x4 vector numbers */
+# define __e2k_vabs_f32(s1) __builtin_e2k_qpand(s1,\
+                            __builtin_e2k_qppackdl(_FABS_,_FABS_))
+/* Rounding of f32x4 vector (nearest) */
+# define __e2k_vround_f32(s1) __builtin_e2k_qpfstoifs(_TOIF_RC_NEAREST,s1)
+/* Converting f32x4 vector to i32x4 */
+# define __e2k_vcon_f32i    __builtin_e2k_qpfstoistr
+/* Float multiply+add of f32x4 vectors.
+ * the compiler replace it if target arch support FMA instructions */
+# define __e2k_vmul_add_f32(m1,m2,a3) __builtin_e2k_qpfadds(__builtin_e2k_qpfmuls(m1,m2), a3)
+
+/* Bitwise operations:
+ * and  - `&`
+ * andn - `~`
+ * or   - `|`
+ * xor  - `^`
+*/
+# define __e2k_vbitw(PAT, s1, s2) __builtin_e2k_qp##PAT(s1, s2)
+
+/* Shifts i64x2,i32x4,i16x8,i8x16 vectors:
+ * l{l,a,c}{d,w,h,b} - `<<`
+ * r{l,a,c}{d,w,h,b} - `>>`
+ * _|
+ * _{logic,arithmetic,cycled}
+*/
+# define __e2k_vshift(PAT, s1, s2) __builtin_e2k_qps##PAT(s1, s2)
+
+/* Compares i64x2,i32x4,i16x8,i8x16 vectors:
+ * gt{d,w,h,b} - `>`
+ * eq{d,w,h,b} - `==`
+*/
+# define __e2k_vcmp(PAT, s1, s2) __builtin_e2k_qpcmp##PAT(s1, s2)
 
 /* Compares two f32x4:
  * les - `<=`
@@ -110,12 +142,23 @@ typedef __di __vd;
 #  define __e2k_vsign_i8      __builtin_e2k_psignb
 #  define __e2k_vmadd_u8_i16  __builtin_e2k_pmaddubsh
 #  define __e2k_vhadd_i32     __builtin_e2k_phaddw
+/* Rounding of f32x2 vector (nearest) */
+#  define __e2k_vround_f32(s1) __builtin_e2k_pfstoifs(_TOIF_RC_NEAREST,s1)
 # else
 // `mul_add` without vec expansion
 #  define __e2k_vmaddn_i16(xe, xo, ye, yo) \
           __builtin_e2k_paddh(             \
              __builtin_e2k_pmullh(xe, ye), \
              __builtin_e2k_pmullh(xo, yo))
+
+/* Rounding of f32x2 vector (nearest) */
+__E2K_INLINE __di
+__e2k_vround_f32(__di s1) {
+    __di dst =__builtin_e2k_pistofs(
+              __builtin_e2k_pfstois(s1 & _FABS_));
+    return dst | (s1 & ~_FABS_);
+}
+
 # endif
 
 /* Horisontal sum i16x4 vector pairs with i32x2 vector output */
@@ -126,8 +169,37 @@ typedef __di __vd;
 # define __e2k_vnpck_Lb  __builtin_e2k_punpcklbh
 # define __e2k_vpadd_i32 __builtin_e2k_paddw
 # define __e2k_vmerge    __builtin_e2k_pmerge
-/* Remove sign from 32x2 (int/float) vector numbers */
-# define __e2k_vabs_i32f(s1) __builtin_e2k_pandd(s1, _MABS_)
+# define __e2k_vmax_f32  __builtin_e2k_pfmaxs
+/* Remove sign from f32x2 vector numbers */
+# define __e2k_vabs_f32(s1) __builtin_e2k_pandd(s1, _FABS_)
+/* Float multiply+add of f32x2 vectors.
+ * the compiler will decide for itself whether it
+ * is worth replacing this with `fmul_add` instruction */
+# define __e2k_vmul_add_f32(m1,m2,a3) __builtin_e2k_pfadds(__builtin_e2k_pfmuls(m1,m2), a3)
+/* Converting f32x2 vector to i32x2 */
+# define __e2k_vcon_f32i  __builtin_e2k_pfstoistr
+
+/* Bitwise operations:
+ * and  - `&`
+ * andn - `~`
+ * or   - `|`
+ * xor  - `^`
+*/
+# define __e2k_vbitw(_P_, s1, s2) __builtin_e2k_p##_P_##d(s1, s2)
+
+/* Shifts i64x1,i32x2,i16x4,i8x8 vectors:
+ * l{l,a,c}{d,w,h,b} - `<<`
+ * r{l,a,c}{d,w,h,b} - `>>`
+ * _|
+ * _{logic,arithmetic,cycled}
+*/
+# define __e2k_vshift(PAT, s1, s2) __builtin_e2k_ps##PAT(s1, s2)
+
+/* Compares i64x1,i32x2,i16x4,i8x8 vectors:
+ * gt{d,w,h,b} - `>`
+ * eq{d,w,h,b} - `==`
+*/
+# define __e2k_vcmp(PAT, s1, s2) __builtin_e2k_pcmp##PAT(s1, s2)
 
 /* Compares two f32x2:
  * les - `<=`

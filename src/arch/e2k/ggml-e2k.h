@@ -1,6 +1,6 @@
 
 
-#define __iset__ 5
+#define __iset__ 3
 
 #include "ggml-e2kintrin.h"
 
@@ -256,33 +256,38 @@ __e2k_vec_dot_q4_0_q8_0(const int nc, const void * restrict vx, const void * res
     return sumf;
 }
 
+/*
+    Find maximum delta in vectors
+
+   (compares non-sign and merging signs via mask)
+*/
 __E2K_INLINE __vd
-__e2k_find_delta_max_f32(
-    __vd a,__vd b,
-    __vd u,__vd p,
-    __vd e,__vd q,
-    __vd z,__vd g
-) {
+__e2k_find_delta_max_f32(//            
+    __vd a,__vd b,     //   a0  ;  a1  
+    __vd u,__vd p,     // ------+------   UB0 <= UA0 ; UB1 <= UA1  @  FFFF ; 0000
+    __vd e,__vd q,     //   b0  ;  b1                             ~>   a0  ;  b1
+    __vd z,__vd g      // ------+------   UC0 <= UA0 ; UC1 <= UB1  @  0000 ; FFFF
+) {                    //   c0  ;  c1                             ~>   c0  ;  b1
     __vd m0, m1, m2, m3;
     // compare `b` (l)ess or (e)qual `a` (b <= a)
-    m0 = __e2k_vfcmp(les, __e2k_vabs_i32f(b), __e2k_vabs_i32f(a));
-    m1 = __e2k_vfcmp(les, __e2k_vabs_i32f(p), __e2k_vabs_i32f(u));
-    m2 = __e2k_vfcmp(les, __e2k_vabs_i32f(q), __e2k_vabs_i32f(e));
-    m3 = __e2k_vfcmp(les, __e2k_vabs_i32f(g), __e2k_vabs_i32f(z));
+    m0 = __e2k_vfcmp(les, __e2k_vabs_f32(b), __e2k_vabs_f32(a));
+    m1 = __e2k_vfcmp(les, __e2k_vabs_f32(p), __e2k_vabs_f32(u));
+    m2 = __e2k_vfcmp(les, __e2k_vabs_f32(q), __e2k_vabs_f32(e));
+    m3 = __e2k_vfcmp(les, __e2k_vabs_f32(g), __e2k_vabs_f32(z));
     // use mask for merging values from non-abs `a` or `b`,
     a = __e2k_vmerge(a, b, m0),
     p = __e2k_vmerge(u, p, m1),
     e = __e2k_vmerge(e, q, m2),
     g = __e2k_vmerge(z, g, m3);
     // remove result signs and compare
-    m0 = __e2k_vfcmp(les,__e2k_vabs_i32f(p), __e2k_vabs_i32f(a));
-    m1 = __e2k_vfcmp(les,__e2k_vabs_i32f(g), __e2k_vabs_i32f(e));
+    m0 = __e2k_vfcmp(les,__e2k_vabs_f32(p), __e2k_vabs_f32(a));
+    m1 = __e2k_vfcmp(les,__e2k_vabs_f32(g), __e2k_vabs_f32(e));
     // reversing arguments is very important,
     // because previous command generates mask for `b` (b <= a)
     a = __e2k_vmerge(a, p, m0);
     g = __e2k_vmerge(e, g, m1);
 
-    m2 = __e2k_vfcmp(les,__e2k_vabs_i32f(g), __e2k_vabs_i32f(a));
+    m2 = __e2k_vfcmp(les,__e2k_vabs_f32(g), __e2k_vabs_f32(a));
     // finally
     return __e2k_vmerge(a, g, m2);
 }
@@ -290,17 +295,12 @@ __e2k_find_delta_max_f32(
 __E2K_INLINE void
 __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict _y)
 {
-    const __di * restrict x = (const __di * restrict)_x;
+    const __vd * restrict x = (const __vd * restrict)_x;
        vd_q4_0 * restrict y = (   vd_q4_0 * restrict)_y;
-/*
-   Optimized for 64-bit vectors only,
-   because it's not needed constants packing
-   and special packed bitwise op's.
-*/
+
     int i, iq;
 
-#define _MIN4_ 0x0000000F0000000FLL
-#define _MAX8_ 0x000000FF000000FFLL
+#define _MAX4_ 0x0000000F0000000FLL
 
 #pragma loop count(1000)
     for (i = 0, iq = 0; i < nb; iq += QS_L, i++)
@@ -309,120 +309,129 @@ __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict 
 /*
     Wide instructions per iteration:
 
+    E2K_V5+ : 14
     E2K_V2+ : 32
+
+    Compiler flags: lcc -O4 -ffast
 */
-        __di ad[2], am, vx[QS_L];
+        __vd cmx, vx[QS_L], qs[QS_H];
 
 #pragma unroll
-        for (j = 0, k = 0; k < 2; j += 8, k++) {
-/*
-    Find maximum delta in vectors:
-
-  a0  ;  a1  
-------+------   b0 <= a0 ; b1 <= a1  @  FFFF ; 0000
-  b0  ;  b1                         ~>   a0  ;  b1
-------+------   c0 <= a0 ; c1 <= b1  @  0000 ; FFFF
-  c0  ;  c1                         ~>   c0  ;  b1
-*/
-        __di a = (vx[k + 0] = x[iq + j + 0]), b = (vx[k + 1] = x[iq + j + 1]), m0,
-             c = (vx[k + 2] = x[iq + j + 2]), p = (vx[k + 3] = x[iq + j + 3]), m1,
-             e = (vx[k + 4] = x[iq + j + 4]), q = (vx[k + 5] = x[iq + j + 5]), m2,
-             y = (vx[k + 6] = x[iq + j + 6]), g = (vx[k + 7] = x[iq + j + 7]), m3;
-
-            m0 = __builtin_e2k_pfcmples(b & _MABS_, a & _MABS_);
-            m1 = __builtin_e2k_pfcmples(p & _MABS_, c & _MABS_);
-            m2 = __builtin_e2k_pfcmples(q & _MABS_, e & _MABS_);
-            m3 = __builtin_e2k_pfcmples(g & _MABS_, y & _MABS_);
-
-            a = (a & m0) | (b & ~m0), e = (e & m2) | (q & ~m2);
-            p = (c & m1) | (p & ~m1), g = (y & m3) | (g & ~m3);
-
-            m0 = __builtin_e2k_pfcmples(p & _MABS_, a & _MABS_);
-            m2 = __builtin_e2k_pfcmples(g & _MABS_, e & _MABS_);
-
-            a = (a & m0) | (p & ~m0),
-            g = (e & m2) | (g & ~m2);
-
-            m0 = __builtin_e2k_pfcmples(g & _MABS_, a & _MABS_);
-
-            ad[k] = (a & m0) | (g & ~m0);
+        for (j = 0; j < QS_L; j++) {
+            // all `vx` values writes in registers, not to stack
+            vx[j] = x[iq + j];
         }
-        // no delta
-        if (ad[1] == 0 && ad[0] == 0) {
-            y[i].d = 0.0f;
+        cmx = __e2k_find_delta_max_f32(
+            vx[0], vx[1],
+            vx[2], vx[3],
+            vx[4], vx[5],
+            vx[6], vx[7]
+        );
+
 #if __e2k_v__ >= 5
-            type_union_128 sat = { .l = { .l0 = 0x8888888888888888LL, .l1 = 0x8888888888888888LL } };
-            y[i].qs[0] = sat.__v2di;
-#else
-            y[i].qs[0] = y[i].qs[1] = 0x8888888888888888LL;
-#endif
-            continue;
-        }
-        am  = __builtin_e2k_pfcmples(ad[1] & _MABS_,ad[0] & _MABS_);
-                      /* convert signed max */
-        type_union_64 fvd = { .l0 = (ad[0] & am) | (ad[1] & ~am) },
-                      /* convert unsigned max */
-                      fcm = { .l0 = fvd.l0 & _MABS_ };
-                     /* uf0 => uf1 ? sf0 : sf1 */
-        float d = (fcm.f.f1 <= fcm.f.f0 ? fvd.f.f0 : fvd.f.f1) / -8;
+        type_union_128 fvd = { .__v2di = cmx },
+                       fcm = { .__v2di = __e2k_vabs_f32(cmx) };
 
-        fcm.f.f0 = fcm.f.f1 = 1.0f / d;
+        __di a = fvd.l.l0, ua = fcm.l.l0,
+             b = fvd.l.l1, ub = fcm.l.l1;
+
+#else
+        type_union_64 fvd, fcm;
+
+        __vd a = cmx, b = __e2k_find_delta_max_f32(
+            vx[ 8], vx[ 9],
+            vx[10], vx[11],
+            vx[12], vx[13],
+            vx[14], vx[15]
+        ),
+        ua = __e2k_vabs_f32(a),
+        ub = __e2k_vabs_f32(b);
+#endif
+        bool hasDx = (a != 0 || b != 0);
+        float dmax = 0.0f;
+        float dmul = hasDx ? 1.0f : 0.0f;
+
+        if ( hasDx ) {
+            a  = __builtin_e2k_pmerge(a, b, __builtin_e2k_pfcmples(ub, ua)),
+            ua = __builtin_e2k_pandd (a, _FABS_);
+
+#if __e2k_v__ >= 5
+            fvd.l.l0 = a, fcm.l.l0 = ua;
+#else
+            fvd.l0 = a, fcm.l0 = ua;
+#endif
+            dmax = fcm.f.f1 <= fcm.f.f0 ? fvd.f.f0 : fvd.f.f1,
+            dmax /= -8,
+            dmul /= dmax;
+        }
+
+#if __e2k_v__ >= 5
+        fcm.f.f0 = fcm.f.f1 = fcm.f.f2 = fcm.f.f3 = dmul;
+        fvd.f.f0 = fvd.f.f1 = fvd.f.f2 = fvd.f.f3 = 8.5f;
+
+        const __vd max4 = __builtin_e2k_qppackdl(_MAX4_,_MAX4_),
+                   am = fcm.__v2di,
+                   ad = fvd.__v2di;
+#else
+        fcm.f.f0 = fcm.f.f1 = dmul;
         fvd.f.f0 = fvd.f.f1 = 8.5f;
 
-        __di qs[QS_H], qs0, qs1;
+        const __vd max4 = _MAX4_,
+                   am = fcm.l0,
+                   ad = fvd.l0;
+#endif
 
 #pragma unroll
         for (j = 0, k = QS_H; j < QS_H; j++, k++)
         {
-            __di x_lo, x_hi, ml, mh;
-
-        /* Example what we doo in this cycle
-
-           0x0000000A0000000B
-           0x0000000F0000000E (<< 4) 0x000000F0000000E0  
-                              (  OR) 0x000000FA000000EB  
-        */
-            x_lo = __builtin_e2k_pfadds(// xf0 * (1.0 / d) + 8.5
-                   __builtin_e2k_pfmuls(vx[j], fcm.l0), fvd.l0);
-            x_hi = __builtin_e2k_pfadds(
-                   __builtin_e2k_pfmuls(vx[k], fcm.l0), fvd.l0);
+            __vd x_lo, x_hi, ml, mh;
+            // x * (1.0 / d) + 8.5
+            x_lo = __e2k_vmul_add_f32(vx[j], am, ad);
+            x_hi = __e2k_vmul_add_f32(vx[k], am, ad);
             // Convert f32 -> i32
-            x_lo = __builtin_e2k_pfstoistr(x_lo);
-            x_hi = __builtin_e2k_pfstoistr(x_hi);
-            // 0xF > x  -> mask
-            ml  =  __builtin_e2k_pcmpgtw(_MIN4_, x_lo);
-            mh  =  __builtin_e2k_pcmpgtw(_MIN4_, x_hi);
-            // (x & mask) | (min4 & ~m)
-            x_lo = __builtin_e2k_pmerge(_MIN4_, x_lo & _MAX8_, ml);
-            x_hi = __builtin_e2k_pmerge(_MIN4_, x_hi & _MIN4_, mh);
-            // lo | (hi << 4)
-            qs[j] = x_lo | __builtin_e2k_psllw(x_hi, 4);
+            x_lo = __e2k_vcon_f32i(x_lo);
+            x_hi = __e2k_vcon_f32i(x_hi);
+            // Prefer numbers to uint_4
+            x_lo = __e2k_vbitw(and, x_lo, max4);
+            x_hi = __e2k_vbitw(and, x_hi, max4);
+            // 1. 0x00000001
+            // 2. 0x0000000F (<< 4) 0x000000F0
+            // 3.            (  OR) 0x000000F1
+            qs[j] = __e2k_vbitw(or, x_lo, __e2k_vshift(llw, x_hi, 4));
         }
-        qs[0] = __builtin_e2k_psllw(qs[0], 8);
-        qs[2] = __builtin_e2k_psllw(qs[2], 8);
+        qs[0] =__e2k_vbitw(or, qs[1],
+             __e2k_vshift(llw, qs[0], 8));
+        qs[2] =__e2k_vbitw(or, qs[3],
+             __e2k_vshift(llw, qs[2], 8));
 
-        qs[4] = __builtin_e2k_psllw(qs[4], 8);
-        qs[6] = __builtin_e2k_psllw(qs[6], 8);
+        y[i].d = dmax;
 
-        qs0   = __builtin_e2k_pshufb(
-//          0x0000F0F10000E0E1  0x0000F2F30000E2E3
-             (qs[0]  |  qs[1]),  (qs[2]  |  qs[3]),
-            0x0D090C0805010400LL
-        );
-        qs1   = __builtin_e2k_pshufb(
-//          0x0000F4F50000E4E5  0x0000F6F70000E6E7
-             (qs[4]  |  qs[5]),  (qs[6]  |  qs[7]),
-            0x0D090C0805010400LL
-        );
-        y[i].d = d;
 #if __e2k_v__ >= 5
-        type_union_128 sat = { .l = { .l0 = qs0, .l1 = qs1 } };
-        y[i].qs[0] = sat.__v2di;
+        y[i].qs[0] = __builtin_e2k_qppermb(
+          qs[1], // 0x0000F0F10000E0E10000F2F30000E2E3
+          qs[2], // 0x0000F4F50000E4E50000F6F70000E6E7
+          __builtin_e2k_qppackdl(
+                    0x10141115181C191DLL,
+                    0x00040105080C090DLL ));
 #else
-        y[i].qs[0] = qs0, y[i].qs[1] = qs1;
+        qs[4] =__e2k_vbitw(or, qs[5],
+             __e2k_vshift(llw, qs[4], 8));
+
+        qs[6] =__e2k_vbitw(or, qs[7],
+             __e2k_vshift(llw, qs[6], 8));
+
+        y[i].qs[0] = __builtin_e2k_pshufb(
+        /*  0x0000F0F10000E0E1  0x0000F2F30000E2E3  */
+            qs[0]/* | qs[1]*/, qs[2]/* | qs[3]*/,
+            0x00040105080C090DLL
+        );
+        y[i].qs[1] = __builtin_e2k_pshufb(
+        /*  0x0000F4F50000E4E5  0x0000F6F70000E6E7  */
+            qs[4]/* | qs[5]*/,  qs[6]/* | qs[7]*/,
+            0x00040105080C090DLL
+        );
 #endif
-#undef _MIN8_
-#undef _MIN4_
+#undef _MAX4_
     }
 }
 
@@ -441,59 +450,51 @@ __e2k_quantize_row_q8_0(const int nb, const float * restrict _x, void * restrict
 /*
     Wide instructions per iteration:
 
-    E2K_V5+ : 16
-    E2K_V2+ : 27
+    E2K_V5+ : 13
+    E2K_V3+ : 24
+    E2K_V2+ : 32
 
     Compiler flags: lcc -O4 -ffast
 */
-        __vd cmx, vx[QS_L];
+        __vd umx[QS_L], vx[QS_L];
 
 #pragma unroll
-        for (j = 0, k = 0; k < QS_H; j += 2, k++) {
+        for (j = 0; j < QS_L; j++) {
             // all `vx` values writes in registers, not to stack
-            vx[j + 0] = x[iq + j + 0];
-            vx[j + 1] = x[iq + j + 1];
+            umx[j] = __e2k_vabs_f32((vx[j] = x[iq + j]));
         }
-        cmx = __e2k_find_delta_max_f32(
-            vx[0], vx[1],
-            vx[2], vx[3],
-            vx[4], vx[5],
-            vx[6], vx[7]
-        );
+#pragma unroll
+        for (j = 0; j < QS_L; j += 2)
+            umx[j] = __e2k_vmax_f32(umx[j], umx[j+1]);
+#pragma unroll
+        for (j = 0; j < QS_L; j += 4)
+            umx[j] = __e2k_vmax_f32(umx[j], umx[j+2]);
+#pragma unroll
+        for (j = 0; j < QS_L; j += 8)
+            umx[j] = __e2k_vmax_f32(umx[j], umx[j+4]);
 
 #if __e2k_v__ >= 5
-        type_union_128 fvd = { .__v2di = cmx },
-                       fcm = { .__v2di = __e2k_vabs_i32f(cmx) };
+        type_union_128 fcm = { .__v2di = umx[0] };
 
-        __di a = fvd.l.l0, ua = fcm.l.l0,
-             b = fvd.l.l1, ub = fcm.l.l1;
-
+        __di a = fcm.l.l0, b = fcm.l.l1;
 #else
-        type_union_64 fvd, fcm;
+        type_union_64 fcm;
 
-        __vd a = cmx, b = __e2k_find_delta_max_f32(
-            vx[ 8], vx[ 9],
-            vx[10], vx[11],
-            vx[12], vx[13],
-            vx[14], vx[15]
-        ),
-        ua = __e2k_vabs_i32f(a),
-        ub = __e2k_vabs_i32f(b);
+        __vd a = umx[0], b = umx[8];
 #endif
         bool hasDx = (a != 0 || b != 0);
         float dmax = 0.0f;
         float dmul = hasDx ? 1.0f : 0.0f;
 
         if ( hasDx ) {
-            a  = __builtin_e2k_pmerge(a, b, __builtin_e2k_pfcmples(ub, ua)),
-            ua = __builtin_e2k_pandd (a, _MABS_);
+            a = __builtin_e2k_pfmaxs(a, b);
 
 #if __e2k_v__ >= 5
-            fvd.l.l0 = a, fcm.l.l0 = ua;
+            fcm.l.l0 = a;
 #else
-            fvd.l0 = a, fcm.l0 = ua;
+            fcm.l0 = a;
 #endif
-            dmax = fcm.f.f1 <= fcm.f.f0 ? fvd.f.f0 : fvd.f.f1,
+            dmax = fcm.f.f1 <= fcm.f.f0 ? fcm.f.f0 : fcm.f.f1,
             dmax /= 0x7F, //((1 << 7) - 1)
             dmul /= dmax;
         }
@@ -502,13 +503,18 @@ __e2k_quantize_row_q8_0(const int nb, const float * restrict _x, void * restrict
         fcm.f.f0 = fcm.f.f1 = dmul;
         fcm.f.f2 = fcm.f.f3 = dmul;
 #pragma unroll
-        for (j = 0, k = 0; j < QK8_0L; j++, k += QS_H) {
+        for (j = 0, k = 0; j < QK8_0L; j++, k += 4)
+        {
             type_union_128 vx0, vx1, vx2, vx3, sat;
 
-            vx0.__v2di = __builtin_e2k_qpfstoistr(__builtin_e2k_qpfmuls(vx[k+0], fcm.__v2di));
-            vx1.__v2di = __builtin_e2k_qpfstoistr(__builtin_e2k_qpfmuls(vx[k+1], fcm.__v2di));
-            vx2.__v2di = __builtin_e2k_qpfstoistr(__builtin_e2k_qpfmuls(vx[k+2], fcm.__v2di));
-            vx3.__v2di = __builtin_e2k_qpfstoistr(__builtin_e2k_qpfmuls(vx[k+3], fcm.__v2di));
+            vx0.__v2di = __e2k_vcon_f32i(
+                        __e2k_vround_f32(__builtin_e2k_qpfmuls(vx[k+0], fcm.__v2di)));
+            vx1.__v2di = __e2k_vcon_f32i(
+                        __e2k_vround_f32(__builtin_e2k_qpfmuls(vx[k+1], fcm.__v2di)));
+            vx2.__v2di = __e2k_vcon_f32i(
+                        __e2k_vround_f32(__builtin_e2k_qpfmuls(vx[k+2], fcm.__v2di)));
+            vx3.__v2di = __e2k_vcon_f32i(
+                        __e2k_vround_f32(__builtin_e2k_qpfmuls(vx[k+3], fcm.__v2di)));
 
             sat.c.c0 = vx0.i.i0, sat.c.c4 = vx1.i.i0, sat.c.c8  = vx2.i.i0, sat.c.c12 = vx3.i.i0,
             sat.c.c1 = vx0.i.i1, sat.c.c5 = vx1.i.i1, sat.c.c9  = vx2.i.i1, sat.c.c13 = vx3.i.i1,
@@ -518,21 +524,23 @@ __e2k_quantize_row_q8_0(const int nb, const float * restrict _x, void * restrict
             y[i].qs[j] = sat.__v2di;
         }
 #else
-        fvd.f.f0 = fvd.f.f1 = dmul;
+        fcm.f.f0 = fcm.f.f1 = dmul;
 #pragma unroll
-        for (j = 0, k = 0; j < QK8_0L; j++, k += QS_H) {
+        for (j = 0, k = 0; j < QK8_0L; j++, k += 4)
+        {
             __vd vx0, vx1, vx2, vx3;
-            vx0 = __builtin_e2k_pfstoistr(__builtin_e2k_pfmuls(vx[k+0], fcm.l0));
-            vx1 = __builtin_e2k_pfstoistr(__builtin_e2k_pfmuls(vx[k+1], fcm.l0));
-            vx2 = __builtin_e2k_pfstoistr(__builtin_e2k_pfmuls(vx[k+2], fcm.l0));
-            vx3 = __builtin_e2k_pfstoistr(__builtin_e2k_pfmuls(vx[k+3], fcm.l0));
 
-            vx0 = __builtin_e2k_packsswh(vx0, vx1);
-            vx2 = __builtin_e2k_packsswh(vx2, vx3);
+            vx0 = __e2k_vround_f32(__builtin_e2k_pfmuls(vx[k+0], fcm.l0));
+            vx1 = __e2k_vround_f32(__builtin_e2k_pfmuls(vx[k+1], fcm.l0));
+            vx2 = __e2k_vround_f32(__builtin_e2k_pfmuls(vx[k+2], fcm.l0));
+            vx3 = __e2k_vround_f32(__builtin_e2k_pfmuls(vx[k+3], fcm.l0));
 
-            vx0 = __builtin_e2k_packsshb(vx0, vx2);
+            vx0 = __builtin_e2k_packsswh(__e2k_vcon_f32i(vx0),
+                                         __e2k_vcon_f32i(vx1));
+            vx2 = __builtin_e2k_packsswh(__e2k_vcon_f32i(vx2),
+                                         __e2k_vcon_f32i(vx3));
 
-            y[i].qs[j] = vx0;
+            y[i].qs[j] = __builtin_e2k_packsshb(vx0, vx2);
         }
 #endif
         y[i].d = dmax;
