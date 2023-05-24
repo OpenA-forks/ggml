@@ -1,7 +1,4 @@
 
-
-#define __iset__ 3
-
 #include "ggml-e2kintrin.h"
 
 #ifdef __cplusplus
@@ -384,7 +381,7 @@ __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict 
 #pragma unroll
         for (j = 0, k = QS_H; j < QS_H; j++, k++)
         {
-            __vd x_lo, x_hi, ml, mh;
+            __vd x_lo, x_hi;
             // x * (1.0 / d) + 8.5
             x_lo = __e2k_vmul_add_f32(vx[j], am, ad);
             x_hi = __e2k_vmul_add_f32(vx[k], am, ad);
