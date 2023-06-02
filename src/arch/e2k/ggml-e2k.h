@@ -5,38 +5,39 @@
 extern "C"
 {
 #endif
-
+/* Functions */
 #define ARCH_VEC_DOT_Q4_0_Q8_0 __e2k_vec_dot_q4_0_q8_0
 #define ARCH_VEC_DOT_Q8_0_Q8_0 __e2k_vec_dot_q8_0_q8_0
 #define ARCH_QUANTIZE_ROW_Q4_0 __e2k_quantize_row_q4_0
 #define ARCH_QUANTIZE_ROW_Q8_0 __e2k_quantize_row_q8_0
-
+/* Constants */
+#define _MAS4_ 0x0F0F0F0F0F0F0F0FLL
 
 /*
     Sets vectors size and data types for specied e2k vers.
 */
 #if __e2k_v__ >= 5
 // modern quad registers (AVX compatible)
-# define QK4_0L 1
-# define QK8_0L 2
+# define QK4_L 1
+# define QK8_L 2
 # define QS_L (32 / 4)
 # define QS_H (32 / 8)
 #else
 // standart double registers (SSE compatible)
-# define QK4_0L 2
-# define QK8_0L 4
+# define QK4_L 2
+# define QK8_L 4
 # define QS_L (32 / 2)
 # define QS_H (32 / 4)
 #endif
 
 typedef struct {
-    float d;         // delta
-    __vd qs[QK4_0L]; // nibbles / quants
+    float d;        // delta
+    __vd qs[QK4_L]; // nibbles / quants
 } vd_q4_0;
 
 typedef struct {
     float d;         // delta
-    __vd qs[QK8_0L]; // quants
+    __vd qs[QK8_L]; // quants
 } vd_q8_0;
 /* <==== end block ====^ */
 
@@ -63,7 +64,7 @@ __e2k_vec_dot_q8_0_q8_0(const int nc, const void * restrict vx, const void * res
     E2K_V3+ :  6
     E2K_V1+ : 14
 */
-        for (; j < QK8_0L; j++) {
+        for (; j < QK8_L; j++) {
             __vd dx = x[i].qs[j],
                  dy = y[i].qs[j];
 
@@ -102,7 +103,6 @@ __e2k_vec_dot_q4_0_q8_0(const int nc, const void * restrict vx, const void * res
     float sumf = 0.0;
     int i;
 
-#define _MASK_ 0x0F0F0F0F0F0F0F0FLL
 #define _BAIS_ 0x0808080808080808LL
 
 #pragma loop count(1000)
@@ -120,7 +120,7 @@ __e2k_vec_dot_q4_0_q8_0(const int nc, const void * restrict vx, const void * res
 #if   __e2k_v__ >= 5
         type_union_128 sat;
 
-        const __vd mask = __builtin_e2k_qppackdl(_MASK_, _MASK_);
+        const __vd mask = __builtin_e2k_qppackdl(_MAS4_, _MAS4_);
         const __vd bais = __builtin_e2k_qppackdl(_BAIS_, _BAIS_);
 
         // Loads 8b arrays as 128b vectors
@@ -162,10 +162,10 @@ __e2k_vec_dot_q4_0_q8_0(const int nc, const void * restrict vx, const void * res
         __vd ax0, ax1, ax2, ax3;
 
         // Split "x" 4b values in to 8b "lo" and "hi" values
-        x0_l = __builtin_e2k_pandd(dx0,      _MASK_);
-        x0_h = __builtin_e2k_psrlh(dx0, 4) & _MASK_;
-        x1_l = __builtin_e2k_pandd(dx1,      _MASK_); // 0xFF   -> 0x0F
-        x1_h = __builtin_e2k_psrlh(dx1, 4) & _MASK_;  // 0xFFFF -> 0x0FFF -> 0x0F0F
+        x0_l = __builtin_e2k_pandd(dx0,      _MAS4_);
+        x0_h = __builtin_e2k_psrlh(dx0, 4) & _MAS4_;
+        x1_l = __builtin_e2k_pandd(dx1,      _MAS4_); // 0xFF   -> 0x0F
+        x1_h = __builtin_e2k_psrlh(dx1, 4) & _MAS4_;  // 0xFFFF -> 0x0FFF -> 0x0F0F
         // Pack "hi" and "lo" values in to vectors, ordered by dy[0-3] values
         ax0 = __builtin_e2k_punpckhbh(x0_h, x0_l);
         ax1 = __builtin_e2k_punpcklbh(x0_h, x0_l);
@@ -248,47 +248,13 @@ __e2k_vec_dot_q4_0_q8_0(const int nc, const void * restrict vx, const void * res
 #endif
         sumf += fm * sumi;
     }
-#undef _MASK_
 #undef _BAIS_
     return sumf;
 }
 
 /*
-    Find maximum delta in vectors
-
-   (compares non-sign and merging signs via mask)
+  Quantize rows
 */
-__E2K_INLINE __vd
-__e2k_find_delta_max_f32(//            
-    __vd a,__vd b,     //   a0  ;  a1  
-    __vd u,__vd p,     // ------+------   UB0 <= UA0 ; UB1 <= UA1  @  FFFF ; 0000
-    __vd e,__vd q,     //   b0  ;  b1                             ~>   a0  ;  b1
-    __vd z,__vd g      // ------+------   UC0 <= UA0 ; UC1 <= UB1  @  0000 ; FFFF
-) {                    //   c0  ;  c1                             ~>   c0  ;  b1
-    __vd m0, m1, m2, m3;
-    // compare `b` (l)ess or (e)qual `a` (b <= a)
-    m0 = __e2k_vfcmp(les, __e2k_vabs_f32(b), __e2k_vabs_f32(a));
-    m1 = __e2k_vfcmp(les, __e2k_vabs_f32(p), __e2k_vabs_f32(u));
-    m2 = __e2k_vfcmp(les, __e2k_vabs_f32(q), __e2k_vabs_f32(e));
-    m3 = __e2k_vfcmp(les, __e2k_vabs_f32(g), __e2k_vabs_f32(z));
-    // use mask for merging values from non-abs `a` or `b`,
-    a = __e2k_vmerge(a, b, m0),
-    p = __e2k_vmerge(u, p, m1),
-    e = __e2k_vmerge(e, q, m2),
-    g = __e2k_vmerge(z, g, m3);
-    // remove result signs and compare
-    m0 = __e2k_vfcmp(les,__e2k_vabs_f32(p), __e2k_vabs_f32(a));
-    m1 = __e2k_vfcmp(les,__e2k_vabs_f32(g), __e2k_vabs_f32(e));
-    // reversing arguments is very important,
-    // because previous command generates mask for `b` (b <= a)
-    a = __e2k_vmerge(a, p, m0);
-    g = __e2k_vmerge(e, g, m1);
-
-    m2 = __e2k_vfcmp(les,__e2k_vabs_f32(g), __e2k_vabs_f32(a));
-    // finally
-    return __e2k_vmerge(a, g, m2);
-}
-
 __E2K_INLINE void
 __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict _y)
 {
@@ -297,7 +263,13 @@ __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict 
 
     int i, iq;
 
-#define _MAX4_ 0x0000000F0000000FLL
+#if __e2k_v__ >= 5
+    const __vd rnd = __builtin_e2k_qppackdl(0x4108000041080000LL, 0x4108000041080000LL),
+             v4max = __builtin_e2k_qppackdl(_MAS4_, _MAS4_);
+#else
+    const __vd rnd = 0x4108000041080000LL, // [8.5, 8.5]
+             v4max = _MAS4_;
+#endif
 
 #pragma loop count(1000)
     for (i = 0, iq = 0; i < nb; iq += QS_L, i++)
@@ -306,43 +278,51 @@ __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict 
 /*
     Wide instructions per iteration:
 
-    E2K_V5+ : 14
-    E2K_V2+ : 32
+    E2K_V5+ : 15
+    E2K_V4  : 27
+    E2K_V2+ : 33
 
     Compiler flags: lcc -O4 -ffast
 */
-        __vd cmx, vx[QS_L], qs[QS_H];
+        __vd abx[QS_L], max[QS_H], vx[QS_L], x_l[QS_H], x_h[QS_H];
 
 #pragma unroll
         for (j = 0; j < QS_L; j++) {
             // all `vx` values writes in registers, not to stack
-            vx[j] = x[iq + j];
+            abx[j] = __e2k_vabs_f32((vx[j] = x[iq + j]));
         }
-        cmx = __e2k_find_delta_max_f32(
-            vx[0], vx[1],
-            vx[2], vx[3],
-            vx[4], vx[5],
-            vx[6], vx[7]
-        );
+        /* Compares absolute `x` and merging vectors at `abs` and non-abs via mask  */
+#pragma unroll
+        for (j = 0, k = 0; j < QS_L; k++, j += 2) {
+            // compares (l)ess or (e)qual (x1 <= x0)
+            __vd m = __e2k_vfcmp(les, abx[j+1], abx[j]);
+            abx[j] = __e2k_vmerge(abx[j], abx[j+1], m);
+            max[k] = __e2k_vmerge( vx[j],  vx[j+1], m);
+        }
+#pragma unroll
+        for (j = 0, k = 0; j < QS_L; k += 2, j += 4) {
+            __vd m = __e2k_vfcmp(les, abx[j+2], abx[j]);
+            abx[j] = __e2k_vmerge(abx[j], abx[j+2], m);
+            max[k] = __e2k_vmerge(max[k], max[k+1], m);
+        }
+#pragma unroll
+        for (j = 0, k = 0; j < QS_L; k += 4, j += 8) {
+            __vd m = __e2k_vfcmp(les, abx[j+4], abx[j]);
+            abx[j] = __e2k_vmerge(abx[j], abx[j+4], m);
+            max[k] = __e2k_vmerge(max[k], max[k+2], m);
+        }
 
 #if __e2k_v__ >= 5
-        type_union_128 fvd = { .__v2di = cmx },
-                       fcm = { .__v2di = __e2k_vabs_f32(cmx) };
+        type_union_128 fvd = { .__v2di = max[0] },
+                       fcm = { .__v2di = abx[0] };
 
         __di a = fvd.l.l0, ua = fcm.l.l0,
              b = fvd.l.l1, ub = fcm.l.l1;
-
 #else
         type_union_64 fvd, fcm;
 
-        __vd a = cmx, b = __e2k_find_delta_max_f32(
-            vx[ 8], vx[ 9],
-            vx[10], vx[11],
-            vx[12], vx[13],
-            vx[14], vx[15]
-        ),
-        ua = __e2k_vabs_f32(a),
-        ub = __e2k_vabs_f32(b);
+        __vd a = max[0], ua = abx[0],
+             b = max[4], ub = abx[8];
 #endif
         bool hasDx = (a != 0 || b != 0);
         float dmax = 0.0f;
@@ -361,74 +341,38 @@ __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict 
             dmax /= -8,
             dmul /= dmax;
         }
-
-#if __e2k_v__ >= 5
-        fcm.f.f0 = fcm.f.f1 = fcm.f.f2 = fcm.f.f3 = dmul;
-        fvd.f.f0 = fvd.f.f1 = fvd.f.f2 = fvd.f.f3 = 8.5f;
-
-        const __vd max4 = __builtin_e2k_qppackdl(_MAX4_,_MAX4_),
-                   am = fcm.__v2di,
-                   ad = fvd.__v2di;
-#else
-        fcm.f.f0 = fcm.f.f1 = dmul;
-        fvd.f.f0 = fvd.f.f1 = 8.5f;
-
-        const __vd max4 = _MAX4_,
-                   am = fcm.l0,
-                   ad = fvd.l0;
-#endif
-
-#pragma unroll
-        for (j = 0, k = QS_H; j < QS_H; j++, k++)
-        {
-            __vd x_lo, x_hi;
-            // x * (1.0 / d) + 8.5
-            x_lo = __e2k_vmul_add_f32(vx[j], am, ad);
-            x_hi = __e2k_vmul_add_f32(vx[k], am, ad);
-            // Convert f32 -> i32
-            x_lo = __e2k_vcon_f32i(x_lo);
-            x_hi = __e2k_vcon_f32i(x_hi);
-            // Prefer numbers to uint_4
-            x_lo = __e2k_vbitw(and, x_lo, max4);
-            x_hi = __e2k_vbitw(and, x_hi, max4);
-            // 1. 0x00000001
-            // 2. 0x0000000F (<< 4) 0x000000F0
-            // 3.            (  OR) 0x000000F1
-            qs[j] = __e2k_vbitw(or, x_lo, __e2k_vshift(llw, x_hi, 4));
-        }
-        qs[0] =__e2k_vbitw(or, qs[1],
-             __e2k_vshift(llw, qs[0], 8));
-        qs[2] =__e2k_vbitw(or, qs[3],
-             __e2k_vshift(llw, qs[2], 8));
-
         y[i].d = dmax;
 
 #if __e2k_v__ >= 5
-        y[i].qs[0] = __builtin_e2k_qppermb(
-          qs[1], // 0x0000F0F10000E0E10000F2F30000E2E3
-          qs[2], // 0x0000F4F50000E4E50000F6F70000E6E7
-          __builtin_e2k_qppackdl(
-                    0x10141115181C191DLL,
-                    0x00040105080C090DLL ));
+        fcm.f.f0 = fcm.f.f1 = fcm.f.f2 = fcm.f.f3 = dmul;
+
+        const __vd am = fcm.__v2di;
 #else
-        qs[4] =__e2k_vbitw(or, qs[5],
-             __e2k_vshift(llw, qs[4], 8));
+        fcm.f.f0 = fcm.f.f1 = dmul;
 
-        qs[6] =__e2k_vbitw(or, qs[7],
-             __e2k_vshift(llw, qs[6], 8));
-
-        y[i].qs[0] = __builtin_e2k_pshufb(
-        /*  0x0000F0F10000E0E1  0x0000F2F30000E2E3  */
-            qs[0]/* | qs[1]*/, qs[2]/* | qs[3]*/,
-            0x00040105080C090DLL
-        );
-        y[i].qs[1] = __builtin_e2k_pshufb(
-        /*  0x0000F4F50000E4E5  0x0000F6F70000E6E7  */
-            qs[4]/* | qs[5]*/,  qs[6]/* | qs[7]*/,
-            0x00040105080C090DLL
-        );
+        const __vd am = fcm.l0;
 #endif
-#undef _MAX4_
+
+#pragma unroll
+        for (j = 0, k = QS_H; j < QS_H; j++, k++) {
+            // Convert f32 -> i32 ;; x * (1.0 / d) + 8.5
+            x_l[j] = __e2k_vcon_f32i(__e2k_vmul_add_f32(vx[j], am, rnd)),
+            x_h[j] = __e2k_vcon_f32i(__e2k_vmul_add_f32(vx[k], am, rnd));
+        }
+#pragma unroll
+        for (j = 0, k = 0; j < QS_H; j += 4, k++) {
+            __vd  xh, xl;
+
+            xh = __e2k_vpack_i32_i8(x_h[j], x_h[j+1], x_h[j+2], x_h[j+3]);
+            xl = __e2k_vpack_i32_i8(x_l[j], x_l[j+1], x_l[j+2], x_l[j+3]);
+
+            xh = __e2k_vmerge(v4max, xh, __e2k_vcmp(gtb, v4max, xh));
+            xl = __e2k_vmerge(v4max, xl, __e2k_vcmp(gtb, v4max, xl));
+
+            xh = __e2k_vbitw(and, xh, v4max);
+
+            y[i].qs[k] = __e2k_vbitw(or, xl, __e2k_vshift(lld, xh, 4));
+        }
     }
 }
 
@@ -447,9 +391,9 @@ __e2k_quantize_row_q8_0(const int nb, const float * restrict _x, void * restrict
 /*
     Wide instructions per iteration:
 
-    E2K_V5+ : 13
-    E2K_V3+ : 24
-    E2K_V2+ : 32
+    E2K_V5+ : 11
+    E2K_V4  : 16
+    E2K_V2+ : 19
 
     Compiler flags: lcc -O4 -ffast
 */
@@ -495,52 +439,31 @@ __e2k_quantize_row_q8_0(const int nb, const float * restrict _x, void * restrict
             dmax /= 0x7F, //((1 << 7) - 1)
             dmul /= dmax;
         }
+        y[i].d = dmax;
 
 #if __e2k_v__ >= 5
-        fcm.f.f0 = fcm.f.f1 = dmul;
-        fcm.f.f2 = fcm.f.f3 = dmul;
+        fcm.f.f0 = fcm.f.f1 = fcm.f.f2 = fcm.f.f3 = dmul;
+
 #pragma unroll
-        for (j = 0, k = 0; j < QK8_0L; j++, k += 4)
-        {
-            type_union_128 vx0, vx1, vx2, vx3, sat;
-
-            vx0.__v2di = __e2k_vcon_f32i(
-                        __e2k_vround_f32(__builtin_e2k_qpfmuls(vx[k+0], fcm.__v2di)));
-            vx1.__v2di = __e2k_vcon_f32i(
-                        __e2k_vround_f32(__builtin_e2k_qpfmuls(vx[k+1], fcm.__v2di)));
-            vx2.__v2di = __e2k_vcon_f32i(
-                        __e2k_vround_f32(__builtin_e2k_qpfmuls(vx[k+2], fcm.__v2di)));
-            vx3.__v2di = __e2k_vcon_f32i(
-                        __e2k_vround_f32(__builtin_e2k_qpfmuls(vx[k+3], fcm.__v2di)));
-
-            sat.c.c0 = vx0.i.i0, sat.c.c4 = vx1.i.i0, sat.c.c8  = vx2.i.i0, sat.c.c12 = vx3.i.i0,
-            sat.c.c1 = vx0.i.i1, sat.c.c5 = vx1.i.i1, sat.c.c9  = vx2.i.i1, sat.c.c13 = vx3.i.i1,
-            sat.c.c2 = vx0.i.i2, sat.c.c6 = vx1.i.i2, sat.c.c10 = vx2.i.i2, sat.c.c14 = vx3.i.i2,
-            sat.c.c3 = vx0.i.i3, sat.c.c7 = vx1.i.i3, sat.c.c11 = vx2.i.i3, sat.c.c15 = vx3.i.i3;
-
-            y[i].qs[j] = sat.__v2di;
-        }
+        for (j = 0; j < QS_L; j++)
+            vx[j] = __builtin_e2k_qpfmuls(vx[j], fcm.__v2di);
 #else
         fcm.f.f0 = fcm.f.f1 = dmul;
+
 #pragma unroll
-        for (j = 0, k = 0; j < QK8_0L; j++, k += 4)
-        {
-            __vd vx0, vx1, vx2, vx3;
-
-            vx0 = __e2k_vround_f32(__builtin_e2k_pfmuls(vx[k+0], fcm.l0));
-            vx1 = __e2k_vround_f32(__builtin_e2k_pfmuls(vx[k+1], fcm.l0));
-            vx2 = __e2k_vround_f32(__builtin_e2k_pfmuls(vx[k+2], fcm.l0));
-            vx3 = __e2k_vround_f32(__builtin_e2k_pfmuls(vx[k+3], fcm.l0));
-
-            vx0 = __builtin_e2k_packsswh(__e2k_vcon_f32i(vx0),
-                                         __e2k_vcon_f32i(vx1));
-            vx2 = __builtin_e2k_packsswh(__e2k_vcon_f32i(vx2),
-                                         __e2k_vcon_f32i(vx3));
-
-            y[i].qs[j] = __builtin_e2k_packsshb(vx0, vx2);
-        }
+        for (j = 0; j < QS_L; j++)
+            vx[j] = __builtin_e2k_pfmuls(vx[j], fcm.l0);
 #endif
-        y[i].d = dmax;
+#pragma unroll
+        for (j = 0, k = 0; j < QK8_L; j++, k += 4)
+        {
+            __vd x0 = __e2k_vcon_f32i(__e2k_vround_f32(vx[j+0])),
+                 x1 = __e2k_vcon_f32i(__e2k_vround_f32(vx[j+1])),
+                 x2 = __e2k_vcon_f32i(__e2k_vround_f32(vx[j+2])),
+                 x3 = __e2k_vcon_f32i(__e2k_vround_f32(vx[j+3]));
+
+            y[i].qs[j] = __e2k_vpack_i32_i8(x0, x1, x2, x3);
+        }
     }
 }
 

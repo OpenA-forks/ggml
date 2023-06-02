@@ -65,6 +65,8 @@
 */
 typedef __v2di __vd;
 
+# define __e2k_vsub_f32      __builtin_e2k_qpfsubs
+# define __e2k_vmin_f32      __builtin_e2k_qpfmins
 # define __e2k_vmax_f32      __builtin_e2k_qpfmaxs
 # define __e2k_vsign_i8      __builtin_e2k_qpsignb
 # define __e2k_vmadd_u8_i16  __builtin_e2k_qpmaddubsh
@@ -169,6 +171,8 @@ __e2k_vround_f32(__di s1) {
 # define __e2k_vnpck_Lb  __builtin_e2k_punpcklbh
 # define __e2k_vpadd_i32 __builtin_e2k_paddw
 # define __e2k_vmerge    __builtin_e2k_pmerge
+# define __e2k_vsub_f32  __builtin_e2k_pfsubs
+# define __e2k_vmin_f32  __builtin_e2k_pfmins
 # define __e2k_vmax_f32  __builtin_e2k_pfmaxs
 /* Remove sign from f32x2 vector numbers */
 # define __e2k_vabs_f32(s1) __builtin_e2k_pandd(s1, _FABS_)
@@ -241,5 +245,29 @@ __e2k_vmadd_i8_i16(__vd sx, __vd sy) {
     __e2k_vspliteo_i8_i16(sy, y_e, y_o);
 
     return __e2k_vmaddn_i16(x_e, x_o, y_e, y_o);
+#endif
+}
+
+__E2K_INLINE __vd
+__e2k_vpack_i32_i8(__vd s1, __vd s2, __vd s3, __vd s4) {
+#if __e2k_v__ >= 5
+    type_union_128 v0, v1, v2, v3, dst;
+
+    v0.__v2di = s1, v2.__v2di = s3;
+    v1.__v2di = s2, v3.__v2di = s4;
+
+    dst.c.c0 = v0.i.i0, dst.c.c4 = v1.i.i0, dst.c.c8  = v2.i.i0, dst.c.c12 = v3.i.i0,
+    dst.c.c1 = v0.i.i1, dst.c.c5 = v1.i.i1, dst.c.c9  = v2.i.i1, dst.c.c13 = v3.i.i1,
+    dst.c.c2 = v0.i.i2, dst.c.c6 = v1.i.i2, dst.c.c10 = v2.i.i2, dst.c.c14 = v3.i.i2,
+    dst.c.c3 = v0.i.i3, dst.c.c7 = v1.i.i3, dst.c.c11 = v2.i.i3, dst.c.c15 = v3.i.i3;
+
+    return dst.__v2di;
+
+#else
+    __vd dst0, dst1;
+
+    dst0 = __builtin_e2k_pshufb(s2, s1, 0x808080800C080400LL);
+    dst1 = __builtin_e2k_pshufb(s4, s3, 0x0C08040080808080LL);
+    return __builtin_e2k_pord(dst0, dst1);
 #endif
 }
