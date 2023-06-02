@@ -70,8 +70,6 @@ typedef __v2di __vd;
 # define __e2k_vmax_f32      __builtin_e2k_qpfmaxs
 # define __e2k_vsign_i8      __builtin_e2k_qpsignb
 # define __e2k_vmadd_u8_i16  __builtin_e2k_qpmaddubsh
-# define __e2k_vhadd_i32     __builtin_e2k_qphaddw
-# define __e2k_vpadd_i32     __builtin_e2k_qpaddw
 # define __e2k_vmerge        __builtin_e2k_qpmerge
 
 /* Horisontal sum i16x8 vector pairs with i32x4 vector output */
@@ -89,16 +87,26 @@ typedef __v2di __vd;
 # define __e2k_vmul_add_f32(m1,m2,a3) __builtin_e2k_qpfadds(__builtin_e2k_qpfmuls(m1,m2), a3)
 
 /* Bitwise operations:
- * and  - `&`
- * andn - `~`
- * or   - `|`
- * xor  - `^`
+ * `&` : and
+ * `~` : andn
+ * `|` : or
+ * `^` : xor
 */
 # define __e2k_vbitw(PAT, s1, s2) __builtin_e2k_qp##PAT(s1, s2)
 
-/* Shifts i64x2,i32x4,i16x8,i8x16 vectors:
- * l{l,a,c}{d,w,h,b} - `<<`
- * r{l,a,c}{d,w,h,b} - `>>`
+/* Arithmetic operations:
+ * `+` : (h)add{d,w,h,b}
+ * . . . f(h)add{s}
+ * `-` : (h)sub{d,w,h,b} 
+ * . . . f(h)sub{s}
+ * . . . |
+ * . . . (horisontal)
+*/
+# define __e2k_varith(PAT, s1, s2) __builtin_e2k_qp##PAT(s1, s2)
+
+/* Shifts i64x2,i32x4,i16x8 vectors:
+ * l{l,a,c}{d,w,h} - `<<`
+ * r{l,a,c}{d,w,h} - `>>`
  * _|
  * _{logic,arithmetic,cycled}
 */
@@ -143,7 +151,6 @@ typedef __di __vd;
 # if __e2k_v__ >= 3
 #  define __e2k_vsign_i8      __builtin_e2k_psignb
 #  define __e2k_vmadd_u8_i16  __builtin_e2k_pmaddubsh
-#  define __e2k_vhadd_i32     __builtin_e2k_phaddw
 /* Rounding of f32x2 vector (nearest) */
 #  define __e2k_vround_f32(s1) __builtin_e2k_pfstoifs(_TOIF_RC_NEAREST,s1)
 # else
@@ -169,7 +176,6 @@ __e2k_vround_f32(__di s1) {
 # define __e2k_vnpck_Hb  __builtin_e2k_punpckhbh
 // B{3..0} ~ A{3..0} -> {A7 B6 ... A1 B0} 
 # define __e2k_vnpck_Lb  __builtin_e2k_punpcklbh
-# define __e2k_vpadd_i32 __builtin_e2k_paddw
 # define __e2k_vmerge    __builtin_e2k_pmerge
 # define __e2k_vsub_f32  __builtin_e2k_pfsubs
 # define __e2k_vmin_f32  __builtin_e2k_pfmins
@@ -184,16 +190,26 @@ __e2k_vround_f32(__di s1) {
 # define __e2k_vcon_f32i  __builtin_e2k_pfstoistr
 
 /* Bitwise operations:
- * and  - `&`
- * andn - `~`
- * or   - `|`
- * xor  - `^`
+ * `&` : and
+ * `~` : andn
+ * `|` : or
+ * `^` : xor
 */
 # define __e2k_vbitw(_P_, s1, s2) __builtin_e2k_p##_P_##d(s1, s2)
 
-/* Shifts i64x1,i32x2,i16x4,i8x8 vectors:
- * l{l,a,c}{d,w,h,b} - `<<`
- * r{l,a,c}{d,w,h,b} - `>>`
+/* Arithmetic operations:
+ * `+` : (h)add{w,h,b}
+ * . . . f(h)add{s}
+ * `-` : (h)sub{w,h,b} 
+ * . . . f(h)sub{s}
+ * . . . |
+ * . . . (horisontal)
+*/
+# define __e2k_varith(PAT, s1, s2) __builtin_e2k_p##PAT(s1, s2)
+
+/* Shifts i64x1,i32x2,i16x4 vectors:
+ * l{l,a,c}{d,w,h} — `<<`
+ * r{l,a,c}{d,w,h} — `>>`
  * _|
  * _{logic,arithmetic,cycled}
 */
