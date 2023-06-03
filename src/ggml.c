@@ -1318,6 +1318,8 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
         _mm_storeu_si128((__m128i *)(y[i].qs + 16), ni4);
 #endif
     }
+#elif defined(ARCH_QUANTIZE_ROW_Q8_1)
+    ARCH_QUANTIZE_ROW_Q8_1(nb, x, y);
 #else
     // scalar
     quantize_row_q8_1_reference(x, y, k);

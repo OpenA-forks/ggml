@@ -9,7 +9,6 @@ extern "C"
 #define ARCH_VEC_DOT_Q4_0_Q8_0 __e2k_vec_dot_q4_0_q8_0
 #define ARCH_VEC_DOT_Q8_0_Q8_0 __e2k_vec_dot_q8_0_q8_0
 #define ARCH_QUANTIZE_ROW_Q4_0 __e2k_quantize_row_q4_0
-#define ARCH_QUANTIZE_ROW_Q8_0 __e2k_quantize_row_q8_0
 #define ARCH_QUANTIZE_ROW_Q4_1 __e2k_quantize_row_q4_1
 /* Constants */
 #define _MAS4_ 0x0F0F0F0F0F0F0F0FLL
@@ -47,6 +46,11 @@ typedef struct {
     float d, m;     // delta, min
     __vd qs[QK4_L]; // nibbles / quants
 } vd_q4_1;
+
+typedef struct {
+    float d, s;     // delta, d * sum(qs[i])
+    __vd qs[QK8_L]; // quants
+} vd_q8_1;
 /* <==== end block ====^ */
 
 
@@ -299,97 +303,6 @@ __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict 
 }
 
 __E2K_INLINE void
-__e2k_quantize_row_q8_0(const int nb, const float * restrict _x, void * restrict _y)
-{
-    const __vd * restrict x = (const __vd * restrict)_x;
-       vd_q8_0 * restrict y = (   vd_q8_0 * restrict)_y;
-
-    int i, iq;
-
-#pragma loop count(1000)
-    for (i = 0, iq = 0; i < nb; i++, iq += QS_L)
-    {
-        int j, k;
-/*
-    Wide instructions per iteration:
-
-    E2K_V5+ : 11
-    E2K_V4  : 16
-    E2K_V2+ : 19
-
-    Compiler flags: lcc -O4 -ffast
-*/
-        __vd umx[QS_L], vx[QS_L];
-
-#pragma unroll
-        for (j = 0; j < QS_L; j++) {
-            // all `vx` values writes in registers, not to stack
-            umx[j] = __e2k_vabs_f32((vx[j] = x[iq + j]));
-        }
-#pragma unroll
-        for (j = 0; j < QS_L; j += 2)
-            umx[j] = __e2k_vmax_f32(umx[j], umx[j+1]);
-#pragma unroll
-        for (j = 0; j < QS_L; j += 4)
-            umx[j] = __e2k_vmax_f32(umx[j], umx[j+2]);
-#pragma unroll
-        for (j = 0; j < QS_L; j += 8)
-            umx[j] = __e2k_vmax_f32(umx[j], umx[j+4]);
-
-#if __e2k_v__ >= 5
-        type_union_128 fcm = { .__v2di = umx[0] };
-
-        __di a = fcm.l.l0, b = fcm.l.l1;
-#else
-        type_union_64 fcm;
-
-        __vd a = umx[0], b = umx[8];
-#endif
-        bool hasDx = (a != 0 || b != 0);
-        float dmax = 0.0f;
-        float dmul = hasDx ? 1.0f : 0.0f;
-
-        if ( hasDx ) {
-            a = __builtin_e2k_pfmaxs(a, b);
-
-#if __e2k_v__ >= 5
-            fcm.l.l0 = a;
-#else
-            fcm.l0 = a;
-#endif
-            dmax = fcm.f.f1 <= fcm.f.f0 ? fcm.f.f0 : fcm.f.f1,
-            dmax /= 0x7F, //((1 << 7) - 1)
-            dmul /= dmax;
-        }
-        y[i].d = dmax;
-
-#if __e2k_v__ >= 5
-        fcm.f.f0 = fcm.f.f1 = fcm.f.f2 = fcm.f.f3 = dmul;
-
-#pragma unroll
-        for (j = 0; j < QS_L; j++)
-            vx[j] = __builtin_e2k_qpfmuls(vx[j], fcm.__v2di);
-#else
-        fcm.f.f0 = fcm.f.f1 = dmul;
-
-#pragma unroll
-        for (j = 0; j < QS_L; j++)
-            vx[j] = __builtin_e2k_pfmuls(vx[j], fcm.l0);
-#endif
-#pragma unroll
-        for (j = 0, k = 0; j < QK8_L; j++, k += 4)
-        {
-            __vd x0 = __e2k_vcon_f32i(__e2k_vround_f32(vx[j+0])),
-                 x1 = __e2k_vcon_f32i(__e2k_vround_f32(vx[j+1])),
-                 x2 = __e2k_vcon_f32i(__e2k_vround_f32(vx[j+2])),
-                 x3 = __e2k_vcon_f32i(__e2k_vround_f32(vx[j+3]));
-
-            y[i].qs[j] = __e2k_vpack_i32_i8(x0, x1, x2, x3);
-        }
-    }
-}
-
-__E2K_INLINE void
 __e2k_quantize_row_q4_1(const int nb, const void * restrict _x, void * restrict _y)
 {
     const __vd * restrict x = (const __vd * restrict)_x;
@@ -521,6 +434,36 @@ __e2k_quantize_row_q4_1(const int nb, const void * restrict _x, void * restrict 
         }
     }
 }
+
+
+#define __E2K_Q8_I 0
+#include "tmpl_quantize_row_q8_i.c"
+/*
+    Wide instructions per iteration:
+
+    E2K_V5+ : 12
+    E2K_V3+ : 21
+    E2K_V2  : 30
+
+    Compiler flags: lcc (1.26.18) -O4 -ffast
+*/
+#define ARCH_QUANTIZE_ROW_Q8_0 __e2k_quantize_row_q8_0
+#undef __E2K_Q8_I
+
+
+#define __E2K_Q8_I 1
+#include "tmpl_quantize_row_q8_i.c"
+/*
+    Wide instructions per iteration:
+
+    E2K_V5+ : 14
+    E2K_V3+ : 25
+    E2K_V2+ : 34
+
+    Compiler flags: lcc (1.26.18) -O4 -ffast
+*/
+#define ARCH_QUANTIZE_ROW_Q8_1 __e2k_quantize_row_q8_1
+#undef __E2K_Q8_I
 
 #ifdef __cplusplus
 }
