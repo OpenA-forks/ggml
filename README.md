@@ -2,20 +2,18 @@
 
 Tensor library for machine learning
 
-**⚠️ The quantization formats Q4 and Q5 have been updated: https://github.com/ggerganov/ggml/pull/154 - requantize any old models**
-
-***Note that this project is under development and not ready for production use. \
+***Note that this project is under active development. \
 Some of the development is currently happening in the [llama.cpp](https://github.com/ggerganov/llama.cpp) and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) repos***
 
 ## Features
 
 - Written in C
 - 16-bit float support
-- 4-bit integer quantization support
-- Automatic differentiation (WIP in progress)
+- Integer quantization support (4-bit, 5-bit, 8-bit, etc.)
+- Automatic differentiation
 - ADAM and L-BFGS optimizers
-- Optimized for Apple silicon via NEON intrinsics and Accelerate framework
-- On x86 architectures utilzes AVX intrinsics
+- Optimized for Apple Silicon
+- On x86 architectures utilizes AVX / AVX2 intrinsics
 - No third-party dependencies
 - Zero memory allocations during runtime
 
@@ -100,3 +98,15 @@ For more information, checkout the corresponding programs in the [examples](exam
 # fix the path to point to your CUDA compiler
 cmake -DGGML_CUBLAS=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.1/bin/nvcc ..
 ```
+
+## Using clBLAST
+
+```bash
+cmake -DGGML_CLBLAST=ON ..
+```
+
+## Resources
+
+- [GGML - Large Language Models for Everyone](https://github.com/rustformers/llm/blob/main/crates/ggml/README.md): a description of the GGML format provided by the maintainers of the `llm` Rust crate, which provides Rust bindings for GGML
+- [marella/ctransformers](https://github.com/marella/ctransformers): Python bindings for GGML models.
+- [go-skynet/go-ggml-transformers.cpp](https://github.com/go-skynet/go-ggml-transformers.cpp): Golang bindings for GGML models

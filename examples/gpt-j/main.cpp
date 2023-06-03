@@ -11,8 +11,6 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <iostream>
-#include <unistd.h>
 
 // default hparams (GPT-J 6B)
 struct gptj_hparams {
@@ -126,12 +124,15 @@ bool gptj_model_load(const std::string & fname, gptj_model & model, gpt_vocab & 
         }
 
         std::string word;
+        std::vector<char> buf(128);
+
         for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
             fin.read((char *) &len, sizeof(len));
 
-            word.resize(len);
-            fin.read((char *) word.data(), len);
+            buf.resize(len);
+            fin.read((char *) buf.data(), len);
+            word.assign(buf.data(), len);
 
             vocab.token_to_id[word] = i;
             vocab.id_to_token[i] = word;
@@ -603,6 +604,8 @@ bool gptj_eval(
 }
 
 int main(int argc, char ** argv) {
+    ggml_time_init();
+
     const int64_t t_main_start_us = ggml_time_us();
 
     gpt_params params;
@@ -620,14 +623,7 @@ int main(int argc, char ** argv) {
 
     std::mt19937 rng(params.seed);
     if (params.prompt.empty()) {
-        if( !isatty(STDIN_FILENO) ){
-            std::string line;
-            while( std::getline(std::cin, line) ){
-                params.prompt = params.prompt + "\n" + line;
-            }
-        } else {
-            params.prompt = gpt_random_prompt(rng);
-        }
+        params.prompt = gpt_random_prompt(rng);
     }
 
     int64_t t_load_us = 0;
@@ -645,6 +641,8 @@ int main(int argc, char ** argv) {
         }
 
         t_load_us = ggml_time_us() - t_start_us;
+
+        test_gpt_tokenizer(vocab, params.token_test);
     }
 
     int n_past = 0;
