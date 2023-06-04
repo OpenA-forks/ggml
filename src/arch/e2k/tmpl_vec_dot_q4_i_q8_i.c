@@ -45,9 +45,11 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q4_, __E2K_QS_I, _q8_)(
     for (i = 0; i < nb; i++)
     {
 #if __E2K_QS_I == 1
-        const float ms = x[i].m * y[i].s;
+        const float ms = __e2k_cvt_f16_f32(x[i].m) * y[i].s;
+        const float md = __e2k_cvt_f16_f32(x[i].d) * y[i].d;
+#else
+        const float md = __e2k_cvt_f16_f32(x[i].d) * __e2k_cvt_f16_f32(y[i].d);
 #endif
-        const float md = x[i].d * y[i].d;
         int sumi, j, k;
 
        __vd vs[QK4_L];

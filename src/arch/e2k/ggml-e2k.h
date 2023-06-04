@@ -32,17 +32,17 @@ extern "C"
 #endif
 
 typedef struct {
-    float d;        // delta
+    __f16_t d;      // delta
     __vd qs[QK4_L]; // nibbles / quants
 } vd_q4_0;
 
 typedef struct {
-    float d;         // delta
+    __f16_t d;      // delta
     __vd qs[QK8_L]; // quants
 } vd_q8_0;
 
 typedef struct {
-    float d, m;     // delta, min
+    __f16_t d, m;   // delta, min
     __vd qs[QK4_L]; // nibbles / quants
 } vd_q4_1;
 
@@ -65,13 +65,13 @@ __e2k_vec_dot_q8_0_q8_0(const int nb, const void * restrict _x, const void * res
 #pragma loop count(1000)
     for (i = 0; i < nb; i++)
     {
-        float fm = x[i].d * y[i].d;
+        float fm = __e2k_cvt_f16_f32(x[i].d) * __e2k_cvt_f16_f32(y[i].d);
         int sumi, j;
 /*
     Wide instructions per iteration:
 
-    E2K_V5+ :  4
-    E2K_V3+ :  6
+    E2K_V5+ :  6
+    E2K_V3+ :  8
     E2K_V2  : 14
 */
        __vd vs[QK8_L];
@@ -221,7 +221,7 @@ __e2k_quantize_row_q4_0(const int nb, const void * restrict _x, void * restrict 
             dmax /= -8,
             dmul /= dmax;
         }
-        y[i].d = dmax;
+        y[i].d = __e2k_cvt_f32_f16(dmax);
 
 #if __e2k_v__ >= 5
         fcm.f.f0 = fcm.f.f1 = fcm.f.f2 = fcm.f.f3 = dmul;
@@ -347,8 +347,8 @@ __e2k_quantize_row_q4_1(const int nb, const void * restrict _x, void * restrict 
             dmax = (dmax - dmin) / 0xF,
             dmul /= dmax;
         }
-        y[i].d = dmax;
-        y[i].m = dmin;
+        y[i].d = __e2k_cvt_f32_f16(dmax);
+        y[i].m = __e2k_cvt_f32_f16(dmin);
 
 #if __e2k_v__ >= 5
         fcmax.f.f0 = fcmax.f.f1 = fcmax.f.f2 = fcmax.f.f3 = dmul;

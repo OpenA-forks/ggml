@@ -95,9 +95,9 @@ typedef __v2di __vd;
 # define __e2k_vbitw(PAT, s1, s2) __builtin_e2k_qp##PAT(s1, s2)
 
 /* Arithmetic operations:
- * `+` : (h)add{d,w,h,b}
+ * `+` : (h)add{w,h,b}
  * . . . f(h)add{s}
- * `-` : (h)sub{d,w,h,b} 
+ * `-` : (h)sub{w,h,b}
  * . . . f(h)sub{s}
  * . . . |
  * . . . (horisontal)
@@ -174,7 +174,7 @@ __e2k_vround_f32(__di s1) {
 # define __e2k_vhsat_i16_i32(s1) __builtin_e2k_pmaddh(s1, _ONES_)
 // B{7..4} ~ A{7..4} -> {A7 B6 ... A1 B0}
 # define __e2k_vnpck_Hb  __builtin_e2k_punpckhbh
-// B{3..0} ~ A{3..0} -> {A7 B6 ... A1 B0} 
+// B{3..0} ~ A{3..0} -> {A7 B6 ... A1 B0}
 # define __e2k_vnpck_Lb  __builtin_e2k_punpcklbh
 # define __e2k_vmerge    __builtin_e2k_pmerge
 # define __e2k_vsub_f32  __builtin_e2k_pfsubs
@@ -200,7 +200,7 @@ __e2k_vround_f32(__di s1) {
 /* Arithmetic operations:
  * `+` : (h)add{w,h,b}
  * . . . f(h)add{s}
- * `-` : (h)sub{w,h,b} 
+ * `-` : (h)sub{w,h,b}
  * . . . f(h)sub{s}
  * . . . |
  * . . . (horisontal)
@@ -240,7 +240,7 @@ __e2k_vround_f32(__di s1) {
              __builtin_e2k_psllh(src1, 8), 8)), \
     (dst_e = __builtin_e2k_psrah(src1, 8))
 
-#endif // __e2k_v__ 
+#endif // __e2k_v__
 
 
 __E2K_INLINE __vd
@@ -287,3 +287,17 @@ __e2k_vpack_i32_i8(__vd s1, __vd s2, __vd s3, __vd s4) {
     return __builtin_e2k_pord(dst0, dst1);
 #endif
 }
+
+/* F16C is not currently supported by e2k isa.
+   e2kbuiltin.h has functions for working with fp16 vector format,
+   but native GGML fnuncts is better in any case.
+*/
+#ifndef GGML_COMPUTE_FP16_TO_FP32
+# define __e2k_cvt_f16_f32(x) (float)x
+# define __e2k_cvt_f32_f16(x) (float)x
+typedef float __f16_t;
+#else
+# define __e2k_cvt_f16_f32 GGML_COMPUTE_FP16_TO_FP32
+# define __e2k_cvt_f32_f16 GGML_COMPUTE_FP32_TO_FP16
+typedef unsigned short __f16_t;
+#endif

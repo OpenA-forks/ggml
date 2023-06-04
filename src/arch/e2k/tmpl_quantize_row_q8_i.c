@@ -67,7 +67,6 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q8_, __E2K_Q8_I)(
             dmax /= 0xF,
             dmul /= dmax;
         }
-        y[i].d = dmax;
 
 #if __e2k_v__ >= 5
         fcmax.f.f0 = fcmax.f.f1 = fcmax.f.f2 = fcmax.f.f3 = dmul;
@@ -84,6 +83,10 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q8_, __E2K_Q8_I)(
 
 #if __E2K_Q8_I == 1
         __vd vs[QK8_L]; int sumi;
+
+        y[i].d = dmax;
+#else
+        y[i].d = __e2k_cvt_f32_f16(dmax);
 #endif
 #pragma unroll
         for (j = 0, k = 0; k < QK8_L; k++, j += 4)
