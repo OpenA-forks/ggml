@@ -38,6 +38,7 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
              v4max = _MAS4_;
 #endif
 #undef _FEIH_
+#undef _QSMX_
 
     int i, iq;
 
@@ -163,6 +164,7 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
 #if __E2K_QN == 5
         y[i].qh[0] = qh;
 #endif
+#undef _EI_
     }
 }
 #undef __E2K_CONST
