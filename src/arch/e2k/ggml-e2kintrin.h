@@ -51,6 +51,8 @@
 #define _ONES_  0x0001000100010001LL
 #define _FABS_ ~0x8000000080000000LL
 
+/* bitmask type */
+typedef unsigned int __msk32_t;
 
 /*
     Setup universal vector size, data types and command groups
@@ -290,7 +292,7 @@ __e2k_vpack_i32_i8(__vd s1, __vd s2, __vd s3, __vd s4) {
 
 /* F16C is not currently supported by e2k isa.
    e2kbuiltin.h has functions for working with fp16 vector format,
-   but native GGML fnuncts is better in any case.
+   but native GGML functions is better in this case.
 */
 #ifndef GGML_COMPUTE_FP16_TO_FP32
 # define __e2k_cvt_f16_f32(x) (float)x

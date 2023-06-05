@@ -964,7 +964,14 @@ static void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * r
 }
 
 static void quantize_row_q5_0(const float * restrict x, void * restrict y, int k) {
+
+    const int nb = k / QK5_0;
+
+#if defined(ARCH_QUANTIZE_ROW_Q5_0)
+    ARCH_QUANTIZE_ROW_Q5_0(nb, x, y);
+#else
     quantize_row_q5_0_reference(x, y, k);
+#endif
 }
 
 static void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * restrict y, int k) {

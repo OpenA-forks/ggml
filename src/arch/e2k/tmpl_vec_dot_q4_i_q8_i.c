@@ -11,7 +11,7 @@
 #define __E2K_Q8_T         __E2K_TYPEM(vd_q8_, __E2K_QS_I)
 
 /*
-  Tamplate function for quantize_row_q4_0/q4_1
+   Tamplate function for vec_dot_q4_0_q8_0/q4_1_q8_1
 */
 __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q4_, __E2K_QS_I, _q8_)(
     const int nb,
