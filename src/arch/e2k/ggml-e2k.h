@@ -27,6 +27,13 @@ extern "C"
 # define QS_H (32 / 4)
 #endif
 
+/* bitmask type */
+typedef unsigned int __msk32_t;
+typedef union {
+    struct { __vd m[QK8_L]; };
+    struct { __vd ml[QK4_L], mh[QK4_L]; };
+} type_umsk_256;
+
 typedef struct {
     __f16_t d;      // delta
     __vd qs[QK4_L]; // nibbles / quants
@@ -61,6 +68,58 @@ typedef struct {
 /* <==== end block ====^ */
 
 
+/* 
+  Unpack 32-bit in to 256-bit mask of byte signs.
+
+  Based on Intel solution:
+  https://stackoverflow.com/questions/35589189/unpacking-a-bitfield-inverse-of-movmskb
+
+  @param m    (mask to unpack)
+  @param cut  (mask to highlight only the bits you need)
+*/
+__E2K_INLINE type_umsk_256 unpack_msk32(__msk32_t m, const __vd cut)
+{
+/*  Example bitmask:
+    01010010 01000010 ~ hi{31:16}
+    10010110 10110101 ~ lo{15:0}
+  =>
+    0x00ff00ff0000ff00 0x00ff00000000ff00 ~ hi{3:2}
+    0xff0000ff00ffff00 0xff00ffff00ff00ff ~ lo{1:0}
+*/
+#define _SHMSK_ 0x8040201008040201LL
+    type_umsk_256 dst;
+    int j;
+
+#if __e2k_v__ >= 5
+    const __vd qsd = __builtin_e2k_qppackdl(m, m),
+               shm = __builtin_e2k_qppackdl(_SHMSK_, _SHMSK_);
+
+    dst.m[0] = __builtin_e2k_qpshufb(qsd,qsd,
+               __builtin_e2k_qppackdl(0x0101010101010101LL, 0x0LL));
+    dst.m[1] = __builtin_e2k_qpshufb(qsd,qsd,
+               __builtin_e2k_qppackdl(0x0303030303030303LL, 0x0202020202020202LL));
+#else
+    const __vd shm = _SHMSK_;
+
+#pragma unroll
+    for (j = 0; j < QK8_L; j++, m >>= 8)
+        dst.m[j] = __builtin_e2k_pshufb(0, m, 0x0);
+#endif
+#undef _SHMSK_
+#pragma unroll
+    for (j = 0; j < QK8_L; j++) {
+        dst.m[j] = __e2k_vbitw(and, dst.m[j], shm),
+        dst.m[j] =  __e2k_vcmp(eqb, dst.m[j], shm),
+        dst.m[j] = __e2k_vbitw(and, dst.m[j], cut);
+    }
+    return dst;
+}
+
+
+
+/* 
+  Vec Dot Functions
+*/
 __E2K_INLINE float
 __e2k_vec_dot_q8_0_q8_0(const int nb, const void * restrict _x, const void * restrict _y)
 {
@@ -108,20 +167,20 @@ __e2k_vec_dot_q8_0_q8_0(const int nb, const void * restrict _x, const void * res
 }
 
 
+#define __E2K_QN 4
 #define __E2K_QS_I 0
 #include "tmpl_vec_dot_q4_i_q8_i.c"
 /*
     Wide instructions per iteration:
 
-    E2K_V5+ :  5
-    E2K_V3+ :  8
-    E2K_V2  : 13
+    E2K_V5+ :  8
+    E2K_V3+ : 10
+    E2K_V2  : 15
 
-    Compiler flags: lcc (1.26.18) -O4 -ffast
+    Compiler flags: lcc (1.27.06) -O4 -ffast
 */
 #define ARCH_VEC_DOT_Q4_0_Q8_0 __e2k_vec_dot_q4_0_q8_0
 #undef __E2K_QS_I
-
 
 #define __E2K_QS_I 1
 #include "tmpl_vec_dot_q4_i_q8_i.c"
@@ -129,13 +188,45 @@ __e2k_vec_dot_q8_0_q8_0(const int nb, const void * restrict _x, const void * res
     Wide instructions per iteration:
 
     E2K_V5+ : 8
-    E2K_V3+ : 8
-    E2K_V2+ : 13
+    E2K_V3+ : 10
+    E2K_V2+ : 15
 
-    Compiler flags: lcc (1.26.18) -O4 -ffast
+    Compiler flags: lcc (1.27.06) -O4 -ffast
 */
 #define ARCH_VEC_DOT_Q4_1_Q8_1 __e2k_vec_dot_q4_1_q8_1
 #undef __E2K_QS_I
+#undef __E2K_QN
+
+
+#define __E2K_QN 5
+#define __E2K_QS_I 0
+#include "tmpl_vec_dot_q4_i_q8_i.c"
+/*
+    Wide instructions per iteration:
+
+    E2K_V5+ :  9
+    E2K_V3+ : 13
+    E2K_V2  : 18
+
+    Compiler flags: lcc (1.27.06) -O4 -ffast
+*/
+#define ARCH_VEC_DOT_Q5_0_Q8_0 __e2k_vec_dot_q5_0_q8_0
+#undef __E2K_QS_I
+
+#define __E2K_QS_I 1
+#include "tmpl_vec_dot_q4_i_q8_i.c"
+/*
+    Wide instructions per iteration:
+
+    E2K_V5+ :  8
+    E2K_V3+ : 13
+    E2K_V2  : 18
+
+    Compiler flags: lcc (1.27.06) -O4 -ffast
+*/
+#define ARCH_VEC_DOT_Q5_1_Q8_1 __e2k_vec_dot_q5_1_q8_1
+#undef __E2K_QS_I
+#undef __E2K_QN
 
 
 /*

@@ -1,37 +1,47 @@
 
 #ifndef __E2K_QS_I
+# define __E2K_QN   5
 # define __E2K_QS_I 1
 #endif
 
-#define __E2K_FUNCT(a,i,b) /* ..... */ a##i##b##i
-#define __E2K_CONST(a,i)   /* ..... */ a##i
-#define __E2K_TEMPL(a,i,b) __E2K_FUNCT(a, i, b)
-#define __E2K_TYPEM(a,i)   __E2K_CONST(a, i)
-#define __E2K_Q4_T         __E2K_TYPEM(vd_q4_, __E2K_QS_I)
-#define __E2K_Q8_T         __E2K_TYPEM(vd_q8_, __E2K_QS_I)
+#define __E2K_FUNCT(a,n,i,b) /* ..... */ a##n##_##i##b##i
+#define __E2K_CONST(a,n,i)   /* ..... */ a##n##_##i
+#define __E2K_TEMPL(a,n,i,b) __E2K_FUNCT(a, n, i, b)
+#define __E2K_TYPEM(a,n,i)   __E2K_CONST(a, n, i)
+#define __E2K_QN_T           __E2K_TYPEM(vd_q, __E2K_QN, __E2K_QS_I)
+#define __E2K_Q8_T           __E2K_TYPEM(vd_q, /*  */ 8, __E2K_QS_I)
 
 /*
-   Tamplate function for vec_dot_q4_0_q8_0/q4_1_q8_1
+   Tamplate function for vec_dot_[ q4_0_q8_0, q4_1_q8_1,
+                                   q5_0_q8_0, q5_1_q8_1 ]
 */
-__E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q4_, __E2K_QS_I, _q8_)(
+__E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q, __E2K_QN, __E2K_QS_I, _q8_)(
     const int nb,
     const void * restrict _x,
           void * restrict _y
 ) {
 /*
-    0x1DE2 - is max posible value for each line (0xF*0xFF + 0xF*0xFF),
+    0x1DE2 - is max posible value for `q4` line (0xF*0xFF + 0xF*0xFF),
              we can safely sum of 16b vec 4 or 8 times (0x1DE2 * 8 => 0xEF10)
+
+    0x3DC2 - is max for `q5` line (0x1F*0xFF + 0x1F*0xFF)
+             and also can be safely 16b vec sum 4 times (0x3DC2 * 4 => 0xF708)
 
     We also don't need to keep the correct order of the sum,
     we only need to take care of the correct multiplication of bytes in vec.
 */
-    const __E2K_Q4_T * restrict x = (const __E2K_Q4_T * restrict)_x;
+    const __E2K_QN_T * restrict x = (const __E2K_QN_T * restrict)_x;
     const __E2K_Q8_T * restrict y = (const __E2K_Q8_T * restrict)_y;
 
     float sumf = 0.0;
     int i;
 
-#define _BAIS_ 0x0808080808080808LL
+#if __E2K_QN == 5
+# define _BAIS_ 0x1010101010101010LL
+#else
+# define _BAIS_ 0x0808080808080808LL
+#endif
+
 #if __e2k_v__ >= 5
     const __vd mas4 = __builtin_e2k_qppackdl(_MAS4_, _MAS4_),
                bais = __builtin_e2k_qppackdl(_BAIS_, _BAIS_);
@@ -52,8 +62,11 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q4_, __E2K_QS_I, _q8_)(
 #endif
         int sumi, j, k;
 
-       __vd vs[QK4_L];
+        __vd vs[QK4_L];
 
+#if __E2K_QN == 5
+        type_umsk_256 qh = unpack_msk32(x[i].qh[0], bais);
+#endif
 #pragma unroll
         for (j = 0, k = QK4_L; j < QK4_L; j++, k++)
         {
@@ -65,8 +78,12 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q4_, __E2K_QS_I, _q8_)(
             x_l = __e2k_vbitw(and, x_l, mas4); // 0x1E   -> 0x0E
             x_h = __e2k_vbitw(and, x_h, mas4); // 0xF1F2 -> 0x0F1F -> 0x0F0F
 
+#if __E2K_QN == 5
+            x_l = __e2k_vbitw(or, x_l, qh.ml[j]);
+            x_h = __e2k_vbitw(or, x_h, qh.mh[j]);
+#endif
 #if __E2K_QS_I == 0
-            // Move each one in [ -8 .. +7 ] interval:
+            // Move each one in [ -8 .. +7, -16 .. +15 ] interval:
             x_l = __e2k_varith(subsb, x_l, bais);
             x_h = __e2k_varith(subsb, x_h, bais);
 #endif
@@ -100,5 +117,5 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q4_, __E2K_QS_I, _q8_)(
 #undef __E2K_CONST
 #undef __E2K_TEMPL
 #undef __E2K_TYPEM
-#undef __E2K_Q4_T
+#undef __E2K_QN_T
 #undef __E2K_Q8_T

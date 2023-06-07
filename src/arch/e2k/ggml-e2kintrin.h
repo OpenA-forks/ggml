@@ -51,9 +51,6 @@
 #define _ONES_  0x0001000100010001LL
 #define _FABS_ ~0x8000000080000000LL
 
-/* bitmask type */
-typedef unsigned int __msk32_t;
-
 /*
     Setup universal vector size, data types and command groups
     for different ISA versions.

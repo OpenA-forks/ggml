@@ -117,9 +117,8 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
 #endif
 
 #if __E2K_QN == 5
-        __msk32_t qh = 0;
+        __di mq_h[2], mq_l[2];
 #endif
-
 #pragma unroll
         for (j = 0; j < QS_L; j++)
             // Convert f32 -> i32 ;; x * (1.0 / d) + 8.5
@@ -136,25 +135,18 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
 
 #if __E2K_QN == 5
             // shift target bit in to sign of byte
-            __vd lo = __e2k_vshift(lld, xl, 3),
-                 hi = __e2k_vshift(lld, xh, 3);
+            __vd ml = __e2k_vshift(lld, xl, 3), // 0001 0001 << 3
+                 mh = __e2k_vshift(lld, xh, 3); // 1000 1000
 
 # if __e2k_v__ >= 5
-            const int shifs = 16;
+            type_union_128 loq = { .__v2di = ml },
+                           hiq = { .__v2di = mh };
 
-            type_union_128 s0 = { .__v2di = lo },
-                           s1 = { .__v2di = hi };
-
-            __di hi_1 = s1.l.l1, lo_1 = s1.l.l0;
-            // create 16-bit mask from bytes signs
-            qh |= __builtin_e2k_pmovmskb(s0.l.l1, s0.l.l0);
+            mq_l[0] = loq.l.l0, mq_h[0] = hiq.l.l0,
+            mq_l[1] = loq.l.l1, mq_h[1] = hiq.l.l1,
 # else
-            const int shifs = 16 * c;
-
-            __di hi_1 = hi, lo_1 = lo;
+            mq_l[c] = ml, mq_h[c] = mh,
 # endif
-            qh |= __builtin_e2k_pmovmskb(hi_1, lo_1) << shifs;
-
             xl = __e2k_vbitw(and, xl, v4max);
 #endif
             xh = __e2k_vbitw(and, xh, v4max);
@@ -162,7 +154,11 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
             y[i].qs[c] = __e2k_vbitw(or, xl, __e2k_vshift(lld, xh, 4));
         }
 #if __E2K_QN == 5
-        y[i].qh[0] = qh;
+        // create 16-bit mask from bytes signs
+        __msk32_t ql = __builtin_e2k_pmovmskb(mq_l[1], mq_l[0]),
+                  qh = __builtin_e2k_pmovmskb(mq_h[1], mq_h[0]);
+
+        y[i].qh[0] = ql | (qh << 16);
 #endif
 #undef _EI_
     }
