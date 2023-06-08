@@ -17,8 +17,8 @@
 */
 __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q, __E2K_QN, __E2K_QS_I, _q8_)(
     const int nb,
-    const void * restrict _x,
-          void * restrict _y
+    const __E2K_QN_T * restrict x,
+    const __E2K_Q8_T * restrict y
 ) {
 /*
     0x1DE2 - is max posible value for `q4` line (0xF*0xFF + 0xF*0xFF),
@@ -30,8 +30,6 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q, __E2K_QN, __E2K_QS_I, _q8_)(
     We also don't need to keep the correct order of the sum,
     we only need to take care of the correct multiplication of bytes in vec.
 */
-    const __E2K_QN_T * restrict x = (const __E2K_QN_T * restrict)_x;
-    const __E2K_Q8_T * restrict y = (const __E2K_Q8_T * restrict)_y;
 
     float sumf = 0.0;
     int i;

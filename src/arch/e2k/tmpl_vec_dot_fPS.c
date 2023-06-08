@@ -58,7 +58,7 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
     }
 
 #if __E2K_PS == 16
-# pragma loop count (VF16_C - 1)
+# pragma loop count (VF16_C-1)
     for (; i < n; i++)
         sumf += __e2k_cvt_f16_f32(x[i]) * __e2k_cvt_f16_f32(y[i]);
 #else

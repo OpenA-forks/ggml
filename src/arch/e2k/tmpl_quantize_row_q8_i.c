@@ -12,11 +12,9 @@
 */
 __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q8_, __E2K_Q8_I)(
     const int nb,
-    const void * restrict _x,
-          void * restrict _y
+    const __vd * restrict x,
+    __E2K_Q8_T * restrict y
 ) {
-    const __vd * restrict x = (const __vd * restrict)_x;
-    __E2K_Q8_T * restrict y = (__E2K_Q8_T * restrict)_y;
 
     int i, iq;
 

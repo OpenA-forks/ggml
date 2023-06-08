@@ -12,11 +12,9 @@
 */
 __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
     const int nb,
-    const void * restrict _x,
-          void * restrict _y
+    const __vd * restrict x,
+    __E2K_QN_T * restrict y
 ) {
-    const __vd * restrict x = (const __vd * restrict)_x;
-    __E2K_QN_T * restrict y = (__E2K_QN_T * restrict)_y;
 
 #if __E2K_QN == 5
 # define _FEIH_ 0x4184000041840000LL // [16.5, 16.5]
