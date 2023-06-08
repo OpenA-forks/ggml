@@ -125,11 +125,11 @@ __E2K_INLINE type_umsk_256 unpack_msk32(__msk32_t m, const __vd cut)
   Vec Dot Functions
 */
 __E2K_INLINE float
-__e2k_vec_dot_q8_0_q8_0(const int nb, const void * restrict _x, const void * restrict _y)
-{
-    const vd_q8_0 * restrict x = (const vd_q8_0 * restrict)_x;
-    const vd_q8_0 * restrict y = (const vd_q8_0 * restrict)_y;
-
+__e2k_vec_dot_q8_0_q8_0(
+    const int nb,
+    const vd_q8_0 * restrict x,
+    const vd_q8_0 * restrict y
+) {
     float sumf = 0.0f;
     int i;
 

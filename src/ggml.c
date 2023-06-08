@@ -177,6 +177,8 @@ typedef double ggml_float;
 
 #ifdef __wasm_simd128__
 #include <wasm_simd128.h>
+#elif defined(__e2k__)
+# undef __F16C__ // this builtins is deprecated
 #else
 #ifdef __POWER9_VECTOR__
 #include <altivec.h>
@@ -312,6 +314,14 @@ static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
 #define GGML_COMPUTE_FP32_TO_FP16(x) ggml_compute_fp32_to_fp16(x)
 
 #endif // __F16C__
+
+#if defined(__e2k__)
+# include "arch/e2k/ggml-e2k.h"
+/* at now `ggml_compute_fp*_to_fp*` functions is better choes for e2k
+   but maybe future isa has changing it */
+# define GGML_FP16_TO_FP32 __e2k_cvt_f16_f32
+# define GGML_FP32_TO_FP16 __e2k_cvt_f32_f16
+#endif
 
 #endif // __ARM_NEON
 
@@ -767,9 +777,6 @@ inline static int32x4_t vcvtnq_s32_f32(float32x4_t v) {
 
 #endif
 #endif
-#if defined(__e2k__)
-#include "arch/e2k/ggml-e2k.h"
-#endif
 
 #define QK4_0 32
 typedef struct {
@@ -863,7 +870,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict y, int k
     const int nb = k / QK4_0;
 
 #if defined(ARCH_QUANTIZE_ROW_Q4_0)
-    ARCH_QUANTIZE_ROW_Q4_0(nb, x, y);
+    ARCH_QUANTIZE_ROW_Q4_0(nb, &x[0], y);
 #else
     quantize_row_q4_0_reference(x, y, k);
 #endif
@@ -913,7 +920,7 @@ static void quantize_row_q4_1(const float * restrict x, void * restrict y, int k
     const int nb = k / QK4_1;
 
 #if defined(ARCH_QUANTIZE_ROW_Q4_1)
-    ARCH_QUANTIZE_ROW_Q4_1(nb, x, y);
+    ARCH_QUANTIZE_ROW_Q4_1(nb, &x[0], y);
 #else
     quantize_row_q4_1_reference(x, y, k);
 #endif
@@ -968,7 +975,7 @@ static void quantize_row_q5_0(const float * restrict x, void * restrict y, int k
     const int nb = k / QK5_0;
 
 #if defined(ARCH_QUANTIZE_ROW_Q5_0)
-    ARCH_QUANTIZE_ROW_Q5_0(nb, x, y);
+    ARCH_QUANTIZE_ROW_Q5_0(nb, &x[0], y);
 #else
     quantize_row_q5_0_reference(x, y, k);
 #endif
@@ -1025,7 +1032,7 @@ static void quantize_row_q5_1(const float * restrict x, void * restrict y, int k
     const int nb = k / QK5_1;
 
 #if defined(ARCH_QUANTIZE_ROW_Q5_1)
-    ARCH_QUANTIZE_ROW_Q5_1(nb, x, y);
+    ARCH_QUANTIZE_ROW_Q5_1(nb, &x[0], y);
 #else
     quantize_row_q5_1_reference(x, y, k);
 #endif

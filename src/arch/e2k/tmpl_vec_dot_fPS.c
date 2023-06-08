@@ -13,7 +13,7 @@
 __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
     const int n,
     const __E2K_QN_T * restrict x,
-          __E2K_QN_T * restrict y
+    const __E2K_QN_T * restrict y
 ) {
     float sumf = 0.0;
     int i, k;
@@ -27,8 +27,8 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
     const int ev = (n % VF_L),
               nb = (n - ev);
 
-    const __vd * restrict vx = (const __vd * restrict)x;
-    const __vd * restrict vy = (const __vd * restrict)y;
+    const __vd * restrict vx = (const __vd *)&x[0];
+    const __vd * restrict vy = (const __vd *)&y[0];
 
 #if __E2K_PS == 32
     float d0 = ev != 0 ? x[n + 0] * y[n + 0] : 0;
@@ -58,7 +58,12 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
     }
 
 #if __E2K_PS == 16
-# pragma loop count (VF16_C-1)
+
+# if __e2k_v__ >= 5
+#  pragma loop count (7)
+# else
+#  pragma loop count (3)
+# endif
     for (; i < n; i++)
         sumf += __e2k_cvt_f16_f32(x[i]) * __e2k_cvt_f16_f32(y[i]);
 #else
@@ -67,6 +72,7 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
     sumf += d1 + d2;
 # endif
 #endif
+#undef VF_L
     return sumf;
 }
 #undef __E2K_CONST
