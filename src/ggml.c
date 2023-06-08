@@ -1019,7 +1019,16 @@ static void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * r
 }
 
 static void quantize_row_q5_1(const float * restrict x, void * restrict y, int k) {
+
+    assert(k % QK5_1 == 0);
+
+    const int nb = k / QK5_1;
+
+#if defined(ARCH_QUANTIZE_ROW_Q5_1)
+    ARCH_QUANTIZE_ROW_Q5_1(nb, x, y);
+#else
     quantize_row_q5_1_reference(x, y, k);
+#endif
 }
 
 // reference implementation for deterministic creation of model files
@@ -2577,6 +2586,9 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
     }
 
     *s = hsum_float_8(acc) + summs;
+
+#elif defined (ARCH_VEC_DOT_Q4_1_Q8_1)
+    *s = ARCH_VEC_DOT_Q4_1_Q8_1(nb, vx, vy);
 #else
     // scalar
     float sumf = 0.0;
@@ -2811,6 +2823,9 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
     }
 
     *s = hsum_float_8(acc);
+
+#elif defined(ARCH_VEC_DOT_Q5_0_Q8_0)
+    *s = ARCH_VEC_DOT_Q5_0_Q8_0(nb, vx, vy);
 #else
     // scalar
     float sumf = 0.0;
@@ -3067,6 +3082,9 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
     }
 
     *s = hsum_float_8(acc) + summs;
+
+#elif defined(ARCH_VEC_DOT_Q5_1_Q8_1)
+    *s = ARCH_VEC_DOT_Q5_1_Q8_1(nb, vx, vy);
 #else
     // scalar
     float sumf = 0.0;
