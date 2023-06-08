@@ -2162,6 +2162,8 @@ inline static void ggml_vec_dot_f32(const int n, float * restrict s, const float
     for (int i = np; i < n; ++i) {
         sumf += x[i]*y[i];
     }
+#elif defined(ARCH_VEC_DOT_F32)
+    sumf = ARCH_VEC_DOT_F32(n, x, y);
 #else
     // scalar
     ggml_float sumf = 0.0;
@@ -2200,6 +2202,8 @@ inline static void ggml_vec_dot_f16(const int n, float * restrict s, ggml_fp16_t
     for (int i = np; i < n; ++i) {
         sumf += (ggml_float)(GGML_FP16_TO_FP32(x[i])*GGML_FP16_TO_FP32(y[i]));
     }
+#elif defined(ARCH_VEC_DOT_F16)
+    sumf = ARCH_VEC_DOT_F16(n, x, y);
 #else
     for (int i = 0; i < n; ++i) {
         sumf += (ggml_float)(GGML_FP16_TO_FP32(x[i])*GGML_FP16_TO_FP32(y[i]));

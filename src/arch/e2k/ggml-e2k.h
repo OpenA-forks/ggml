@@ -19,12 +19,16 @@ extern "C"
 # define QK8_L 2
 # define QS_L (32 / 4)
 # define QS_H (32 / 8)
+# define VF32_C 4
+# define VF16_C 8
 #else
 // standart double registers (SSE compatible)
 # define QK4_L 2
 # define QK8_L 4
 # define QS_L (32 / 2)
 # define QS_H (32 / 4)
+# define VF32_C 2
+# define VF16_C 4
 #endif
 
 /* bitmask type */
@@ -227,6 +231,32 @@ __e2k_vec_dot_q8_0_q8_0(const int nb, const void * restrict _x, const void * res
 #define ARCH_VEC_DOT_Q5_1_Q8_1 __e2k_vec_dot_q5_1_q8_1
 #undef __E2K_QS_I
 #undef __E2K_QN
+
+#define __E2K_PS 16
+#include "tmpl_vec_dot_fPS.c"
+/*
+    Wide instructions per iteration:
+
+    E2K_V5+ : 10 + 4
+    E2K_V4  : 10
+    E2K_V2+ : 4
+
+    Compiler flags: lcc (1.27.0) -O4 -ffast
+*/
+#define ARCH_VEC_DOT_F16 __e2k_vec_dot_f16p
+#undef __E2K_PS
+
+#define __E2K_PS 32
+#include "tmpl_vec_dot_fPS.c"
+/*
+    Wide instructions per iteration:
+
+    E2K_V2+: 4
+
+    Compiler flags: lcc (1.27.06) -O4 -ffast
+*/
+#define ARCH_VEC_DOT_F32 __e2k_vec_dot_f32p
+#undef __E2K_PS
 
 
 /*

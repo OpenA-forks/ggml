@@ -125,18 +125,19 @@ typedef __v2di __vd;
 */
 # define __e2k_vfcmp(PAT, s1, s2) __builtin_e2k_qpfcmp##PAT(s1, s2)
 
-/* Pack high parts of operands into one striped vector
-    B{15..8} ~ A{15..8} -> {A15 B14 ... A1 B0} */
-# define __e2k_vnpck_Hb(b,a) \
-         __builtin_e2k_qppermb(b,a, \
-           __builtin_e2k_qppackdl(0x1F0F1E0E1D0D1C0CLL, 0x1B0B1A0A19091808LL))
+/* Pack parts of operands into one striped vector.
+ *
+ * Low parts: B{7..0} ~ A{7..0} -> {A15 B14 ... A1 B0}
+ * lbh - i8  
+ * lhw - i16
+ * 
+ * High parts: B{15..8} ~ A{15..8} -> {A15 B14 ... A1 B0}
+ * hbh - i8
+ * hhw - i16
+ */
+# define __e2k_vunpck(PAT,a,b) __builtin_e2k_qpunpck##PAT(a,b)
 
-/* Pack low parts of operands into one striped vector
-    B{7..0} ~ A{7..0} -> {A15 B14 ... A1 B0} */
-# define __e2k_vnpck_Lb(b,a) \
-         __builtin_e2k_qppermb(b,a,\
-           __builtin_e2k_qppackdl(0x1707160615051404LL, 0x1303120211011000LL))
-
+# define ZERO __builtin_e2k_qppackdl(0,0)
 
 #else // __e2k_v__ <= 4
 /*
@@ -171,10 +172,21 @@ __e2k_vround_f32(__di s1) {
 
 /* Horisontal sum i16x4 vector pairs with i32x2 vector output */
 # define __e2k_vhsat_i16_i32(s1) __builtin_e2k_pmaddh(s1, _ONES_)
-// B{7..4} ~ A{7..4} -> {A7 B6 ... A1 B0}
-# define __e2k_vnpck_Hb  __builtin_e2k_punpckhbh
-// B{3..0} ~ A{3..0} -> {A7 B6 ... A1 B0}
-# define __e2k_vnpck_Lb  __builtin_e2k_punpcklbh
+
+/* Pack parts of operands into one striped vector.
+ *
+ * Low parts: B{3..0} ~ A{3..0} -> {A7 B6 ... A1 B0}
+ * lbh - i8  
+ * lhw - i16
+ * 
+ * High parts: B{7..4} ~ A{7..4} -> {A7 B6 ... A1 B0}
+ * hbh - i8
+ * hhw - i16
+ */
+# define __e2k_vunpck(PAT,a,b) __builtin_e2k_punpck##PAT(a,b)
+
+# define ZERO 0x0
+
 # define __e2k_vmerge    __builtin_e2k_pmerge
 # define __e2k_vsub_f32  __builtin_e2k_pfsubs
 # define __e2k_vmin_f32  __builtin_e2k_pfmins
@@ -287,6 +299,49 @@ __e2k_vpack_i32_i8(__vd s1, __vd s2, __vd s3, __vd s4) {
 #endif
 }
 
+__E2K_INLINE __vd __e2k_vcvt_f16_f32(__vd src)
+{
+#define _EXP_  0x7000000070000000LL
+#define _MANT_ 0x3F0000003F000000LL
+#define _BIAS_ 0x0800000008000000LL
+
+#if __e2k_v__ >= 5
+const __vd fabs = __builtin_e2k_qppackdl(~_FABS_, ~_FABS_),
+           bias = __builtin_e2k_qppackdl( _BIAS_, _BIAS_ ),
+            exp = __builtin_e2k_qppackdl(  _EXP_, _EXP_  ),
+           scal = __builtin_e2k_qpaddw  (   exp ,  bias  ),
+           mant = __builtin_e2k_qppackdl( _MANT_, _MANT_ );
+#else
+const __vd fabs = ~_FABS_, mant = _MANT_, exp = _EXP_,
+           bias =  _BIAS_, scal = exp + bias;
+#endif
+#undef _EXP_ 
+#undef _MANT_
+#undef _BIAS_
+    __vd dst = __e2k_varith(addw , src, src),
+        sign = __e2k_vbitw (and  , src, fabs),
+        /* generate normal and nan/null */
+        norm = __e2k_varith(fmuls, __e2k_varith(addw, __e2k_vshift(rlw, dst,  4),  exp), scal),
+      nenorm = __e2k_varith(fsubs, __e2k_vbitw (or  , __e2k_vshift(rlw, dst, 17), mant), mant);
+    /* merge normal or nan/null */
+     dst = __e2k_vmerge(nenorm, norm, __e2k_vcmp(gtw, bias, dst));
+    return __e2k_vbitw(or, dst, sign);
+}
+
+__E2K_INLINE __vd __e2k_vhsat_f16_f32(__vd src1, __vd src2)
+{
+    __vd hi0 = __e2k_vcvt_f16_f32(__e2k_vunpck(hbh, src1, ZERO)),
+         hi1 = __e2k_vcvt_f16_f32(__e2k_vunpck(hbh, src2, ZERO)),
+         lo0 = __e2k_vcvt_f16_f32(__e2k_vunpck(lbh, src1, ZERO)),
+         lo1 = __e2k_vcvt_f16_f32(__e2k_vunpck(lbh, src2, ZERO));
+
+    __vd sat1 = __e2k_varith(fmuls, hi0, hi1),
+         sat2 = __e2k_varith(fmuls, lo0, lo1);
+
+    return __e2k_varith(addw, sat1, sat2);
+
+}
+
 /* F16C is not currently supported by e2k isa.
    e2kbuiltin.h has functions for working with fp16 vector format,
    but native GGML functions is better in this case.
@@ -295,8 +350,10 @@ __e2k_vpack_i32_i8(__vd s1, __vd s2, __vd s3, __vd s4) {
 # define __e2k_cvt_f16_f32(x) (float)x
 # define __e2k_cvt_f32_f16(x) (float)x
 typedef float __f16_t;
+typedef float __f32_t;
 #else
 # define __e2k_cvt_f16_f32 GGML_COMPUTE_FP16_TO_FP32
 # define __e2k_cvt_f32_f16 GGML_COMPUTE_FP32_TO_FP16
 typedef unsigned short __f16_t;
+typedef float          __f32_t;
 #endif
