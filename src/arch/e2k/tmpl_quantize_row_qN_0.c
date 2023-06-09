@@ -120,7 +120,7 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
 #pragma unroll
         for (j = 0; j < QS_L; j++)
             // Convert f32 -> i32 ;; x * (1.0 / d) + 8.5
-            vx[j] = __e2k_vcon_f32i(__e2k_vmul_add_f32(vx[j], am, rnd));
+            vx[j] = __e2k_vcon_f32i(__e2k_vfmadd_f32(vx[j], am, rnd));
 #pragma unroll
         for (c = 0, j = 0, k = QS_H; c < QK4_L; c++, j += 4, k += 4) {
             __vd  xl, xh;

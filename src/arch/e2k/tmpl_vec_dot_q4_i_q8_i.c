@@ -105,7 +105,7 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q, __E2K_QN, __E2K_QS_I, _q8_)(
 #endif
         sumf += md * sumi;
 #if __E2K_QS_I == 1
-        sumf += ms;
+        sumf += ms, bais; // just fo fix warning
 #endif
     }
     return sumf;
