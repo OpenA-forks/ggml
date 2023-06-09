@@ -274,7 +274,7 @@ __e2k_vec_dot_q8_0_q8_0(
 
     Compiler flags: lcc (1.26.18) -O4 -ffast
 */
-#define ARCH_QUANTIZE_ROW_Q4_0 __e2k_quantize_row_q4_0
+#define ARCH_QUANTIZE_ROW_Q4_0(n,x,y) __e2k_quantize_row_q4_0(n, (const __vd*)&x[0], y)
 /*
     Wide instructions per iteration:
 
@@ -283,7 +283,7 @@ __e2k_vec_dot_q8_0_q8_0(
 
     Compiler flags: lcc (1.27.06) -O4 -ffast
 */
-#define ARCH_QUANTIZE_ROW_Q4_1 __e2k_quantize_row_q4_1
+#define ARCH_QUANTIZE_ROW_Q4_1(n,x,y) __e2k_quantize_row_q4_1(n, (const __vd*)&x[0], y)
 #undef __E2K_QN
 
 #define __E2K_QN 5
@@ -298,7 +298,7 @@ __e2k_vec_dot_q8_0_q8_0(
 
     Compiler flags: lcc (1.26.18) -O4 -ffast
 */
-#define ARCH_QUANTIZE_ROW_Q5_0 __e2k_quantize_row_q5_0
+#define ARCH_QUANTIZE_ROW_Q5_0(n,x,y) __e2k_quantize_row_q5_0(n, (const __vd*)&x[0], y)
 /*
     Wide instructions per iteration:
 
@@ -308,7 +308,7 @@ __e2k_vec_dot_q8_0_q8_0(
 
     Compiler flags: lcc (1.27.06) -O4 -ffast
 */
-#define ARCH_QUANTIZE_ROW_Q5_1 __e2k_quantize_row_q5_1
+#define ARCH_QUANTIZE_ROW_Q5_1(n,x,y) __e2k_quantize_row_q5_1(n, (const __vd*)&x[0], y)
 #undef __E2K_QN
 
 #define __E2K_Q8_I 0
@@ -322,7 +322,7 @@ __e2k_vec_dot_q8_0_q8_0(
 
     Compiler flags: lcc (1.26.18) -O4 -ffast
 */
-#define ARCH_QUANTIZE_ROW_Q8_0 __e2k_quantize_row_q8_0
+#define ARCH_QUANTIZE_ROW_Q8_0(n,x,y) __e2k_quantize_row_q8_0(n, (const __vd*)&x[0], y)
 #undef __E2K_Q8_I
 
 
@@ -337,7 +337,7 @@ __e2k_vec_dot_q8_0_q8_0(
 
     Compiler flags: lcc (1.26.18) -O4 -ffast
 */
-#define ARCH_QUANTIZE_ROW_Q8_1 __e2k_quantize_row_q8_1
+#define ARCH_QUANTIZE_ROW_Q8_1(n,x,y) __e2k_quantize_row_q8_1(n, (const __vd*)&x[0], y)
 #undef __E2K_Q8_I
 
 #ifdef __cplusplus

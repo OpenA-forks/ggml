@@ -346,14 +346,12 @@ __E2K_INLINE __vd __e2k_vhsat_f16_f32(__vd src1, __vd src2)
    e2kbuiltin.h has functions for working with fp16 vector format,
    but native GGML functions is better in this case.
 */
+typedef unsigned short __f16_t;
+typedef float          __f32_t;
 #ifndef GGML_COMPUTE_FP16_TO_FP32
-# define __e2k_cvt_f16_f32(x) (float)x
-# define __e2k_cvt_f32_f16(x) (float)x
-typedef float __f16_t;
-typedef float __f32_t;
+# define __e2k_cvt_f16_f32(x) (__f32_t)x
+# define __e2k_cvt_f32_f16(x) (__f16_t)x
 #else
 # define __e2k_cvt_f16_f32 GGML_COMPUTE_FP16_TO_FP32
 # define __e2k_cvt_f32_f16 GGML_COMPUTE_FP32_TO_FP16
-typedef unsigned short __f16_t;
-typedef float          __f32_t;
 #endif

@@ -28,6 +28,7 @@ if (CMAKE_C_COMPILER_VERSION_INTERNAL MATCHES "lcc")
     option(LXX_FLAGS "C++ flags for e2k" OFF)
 
     set(LCC_DEFAULT "-O4 -mcpu=native -ffast")
+    set(LCC_NOINTEL "-mno-mmx -mno-sse -mno-avx -mno-f16c -mno-fma")
     set(LXX_DEFAULT "-O3 -mcpu=native")
 
     if (NOT LCC_FLAGS)
@@ -37,9 +38,9 @@ if (CMAKE_C_COMPILER_VERSION_INTERNAL MATCHES "lcc")
         "  use -DLCC_FLAGS for change c flags    [ default: ${LCC_DEFAULT} ]\n"
         "  use -DLXX_FLAGS for change c++ flags  [ default: ${LXX_DEFAULT} ]\n"
         )
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${LCC_DEFAULT}")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${LCC_DEFAULT} ${LCC_NOINTEL}")
     else()
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${LCC_FLAGS}")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${LCC_FLAGS} ${LCC_NOINTEL}")
     endif()
 
     if (NOT LXX_FLAGS)

@@ -29,7 +29,7 @@ if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES
     #set(GGML_C_FLAGS "${GGML_C_FLAGS} -mcpu=apple-m1")
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "e2k")
     message(STATUS "MCST Elbrus detected")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O4 -ffast -march=native")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O4 -ffast -march=native -mno-mmx -mno-sse -mno-avx -mno-f16c -mno-fma")
 else()
     message(STATUS "x86 detected")
     #set(GGML_C_FLAGS "${GGML_C_FLAGS} -mavx -mavx2 -mfma -mf16c")

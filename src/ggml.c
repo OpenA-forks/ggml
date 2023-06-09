@@ -178,7 +178,14 @@ typedef double ggml_float;
 #ifdef __wasm_simd128__
 #include <wasm_simd128.h>
 #elif defined(__e2k__)
-# undef __F16C__ // this builtins is deprecated
+// this builtins is deprecated by perfomance reasons
+# undef __F16C__
+// don't know why, but this declared globally
+# undef __FMA__ 
+# undef __AVX__
+# undef __AVX2__
+# undef __SSE3__
+# undef __SSSE3__
 #else
 #ifdef __POWER9_VECTOR__
 #include <altivec.h>
@@ -870,7 +877,7 @@ static void quantize_row_q4_0(const float * restrict x, void * restrict y, int k
     const int nb = k / QK4_0;
 
 #if defined(ARCH_QUANTIZE_ROW_Q4_0)
-    ARCH_QUANTIZE_ROW_Q4_0(nb, &x[0], y);
+    ARCH_QUANTIZE_ROW_Q4_0(nb, x, y);
 #else
     quantize_row_q4_0_reference(x, y, k);
 #endif
@@ -920,7 +927,7 @@ static void quantize_row_q4_1(const float * restrict x, void * restrict y, int k
     const int nb = k / QK4_1;
 
 #if defined(ARCH_QUANTIZE_ROW_Q4_1)
-    ARCH_QUANTIZE_ROW_Q4_1(nb, &x[0], y);
+    ARCH_QUANTIZE_ROW_Q4_1(nb, x, y);
 #else
     quantize_row_q4_1_reference(x, y, k);
 #endif
@@ -975,7 +982,7 @@ static void quantize_row_q5_0(const float * restrict x, void * restrict y, int k
     const int nb = k / QK5_0;
 
 #if defined(ARCH_QUANTIZE_ROW_Q5_0)
-    ARCH_QUANTIZE_ROW_Q5_0(nb, &x[0], y);
+    ARCH_QUANTIZE_ROW_Q5_0(nb, x, y);
 #else
     quantize_row_q5_0_reference(x, y, k);
 #endif
@@ -1032,7 +1039,7 @@ static void quantize_row_q5_1(const float * restrict x, void * restrict y, int k
     const int nb = k / QK5_1;
 
 #if defined(ARCH_QUANTIZE_ROW_Q5_1)
-    ARCH_QUANTIZE_ROW_Q5_1(nb, &x[0], y);
+    ARCH_QUANTIZE_ROW_Q5_1(nb, x, y);
 #else
     quantize_row_q5_1_reference(x, y, k);
 #endif
@@ -2170,7 +2177,7 @@ inline static void ggml_vec_dot_f32(const int n, float * restrict s, const float
         sumf += x[i]*y[i];
     }
 #elif defined(ARCH_VEC_DOT_F32)
-    sumf = ARCH_VEC_DOT_F32(n, x, y);
+    float sumf = ARCH_VEC_DOT_F32(n, x, y);
 #else
     // scalar
     ggml_float sumf = 0.0;
