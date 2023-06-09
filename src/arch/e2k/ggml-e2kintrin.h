@@ -50,6 +50,7 @@
 
 #define _ONES_  0x0001000100010001LL
 #define _FABS_ ~0x8000000080000000LL
+#define  MAXUL  0xffffffffffffffffLL
 
 /*
     Setup universal vector size, data types and command groups
@@ -83,7 +84,7 @@ typedef __v2di __vd;
 # define __e2k_vcon_f32i    __builtin_e2k_qpfstoistr
 /* Float multiply+add of f32x4 vectors.
  * the compiler replace it if target arch support FMA instructions */
-# define __e2k_vmul_add_f32(m1,m2,a3) __builtin_e2k_qpfadds(__builtin_e2k_qpfmuls(m1,m2), a3)
+# define __e2k_vfmadd_f32(m1,m2,a3) __builtin_e2k_qpfadds(__builtin_e2k_qpfmuls(m1,m2), a3)
 
 /* Bitwise operations:
  * `&` : and
@@ -196,7 +197,7 @@ __e2k_vround_f32(__di s1) {
 /* Float multiply+add of f32x2 vectors.
  * the compiler will decide for itself whether it
  * is worth replacing this with `fmul_add` instruction */
-# define __e2k_vmul_add_f32(m1,m2,a3) __builtin_e2k_pfadds(__builtin_e2k_pfmuls(m1,m2), a3)
+# define __e2k_vfmadd_f32(m1,m2,a3) __builtin_e2k_pfadds(__builtin_e2k_pfmuls(m1,m2), a3)
 /* Converting f32x2 vector to i32x2 */
 # define __e2k_vcon_f32i  __builtin_e2k_pfstoistr
 
@@ -309,11 +310,11 @@ __E2K_INLINE __vd __e2k_vcvt_f16_f32(__vd src)
 const __vd fabs = __builtin_e2k_qppackdl(~_FABS_, ~_FABS_),
            bias = __builtin_e2k_qppackdl( _BIAS_, _BIAS_ ),
             exp = __builtin_e2k_qppackdl(  _EXP_, _EXP_  ),
-           scal = __builtin_e2k_qpaddw  (   exp ,  bias  ),
+           scal = __builtin_e2k_qpor    (   exp ,  bias  ),
            mant = __builtin_e2k_qppackdl( _MANT_, _MANT_ );
 #else
 const __vd fabs = ~_FABS_, mant = _MANT_, exp = _EXP_,
-           bias =  _BIAS_, scal = exp + bias;
+           bias =  _BIAS_, scal = exp | bias;
 #endif
 #undef _EXP_ 
 #undef _MANT_
@@ -321,25 +322,45 @@ const __vd fabs = ~_FABS_, mant = _MANT_, exp = _EXP_,
     __vd dst = __e2k_varith(addw , src, src),
         sign = __e2k_vbitw (and  , src, fabs),
         /* generate normal and nan/null */
-        norm = __e2k_varith(fmuls, __e2k_varith(addw, __e2k_vshift(rlw, dst,  4),  exp), scal),
-      nenorm = __e2k_varith(fsubs, __e2k_vbitw (or  , __e2k_vshift(rlw, dst, 17), mant), mant);
+        norm = __e2k_varith(fmuls, __e2k_vbitw(or, __e2k_vshift(rlw, dst,  4),  exp), scal),
+      denorm = __e2k_varith(fsubs, __e2k_vbitw(or, __e2k_vshift(rlw, dst, 17), mant), mant);
     /* merge normal or nan/null */
-     dst = __e2k_vmerge(nenorm, norm, __e2k_vcmp(gtw, bias, dst));
+     dst = __e2k_vmerge(denorm, norm, __e2k_vcmp(gtw, bias, dst));
     return __e2k_vbitw(or, dst, sign);
 }
 
-__E2K_INLINE __vd __e2k_vhsat_f16_f32(__vd src1, __vd src2)
+/*
+    Vector multiply and horisontal saturate
+*/
+__E2K_INLINE __vd __e2k_vfmadd_f16(__vd src1, __vd src2, __vd src3)
 {
-    __vd hi0 = __e2k_vcvt_f16_f32(__e2k_vunpck(hbh, src1, ZERO)),
-         hi1 = __e2k_vcvt_f16_f32(__e2k_vunpck(hbh, src2, ZERO)),
-         lo0 = __e2k_vcvt_f16_f32(__e2k_vunpck(lbh, src1, ZERO)),
-         lo1 = __e2k_vcvt_f16_f32(__e2k_vunpck(lbh, src2, ZERO));
+    __vd lo1 = __e2k_vcvt_f16_f32(__e2k_vunpck(lhw, src1, ZERO)),
+         lo2 = __e2k_vcvt_f16_f32(__e2k_vunpck(lhw, src2, ZERO)),
+         hi1 = __e2k_vcvt_f16_f32(__e2k_vunpck(hhw, src1, ZERO)),
+         hi2 = __e2k_vcvt_f16_f32(__e2k_vunpck(hhw, src2, ZERO));
 
-    __vd sat1 = __e2k_varith(fmuls, hi0, hi1),
-         sat2 = __e2k_varith(fmuls, lo0, lo1);
+         lo1 = __e2k_varith(fadds, __e2k_varith(fmuls, hi1, hi2),
+                                   __e2k_varith(fmuls, lo1, lo2));
 
-    return __e2k_varith(addw, sat1, sat2);
+# if __e2k_v__ >= 5
+        type_union_128 sat = { .__v2di = lo1  },
+                       dst = { .__v2di = src3 };
 
+        dst.f.f0 = (double)dst.f.f0 + (double)sat.f.f0,
+        dst.f.f1 = (double)dst.f.f1 + (double)sat.f.f1;
+        dst.f.f2 = (double)dst.f.f2 + (double)sat.f.f2;
+        dst.f.f3 = (double)dst.f.f3 + (double)sat.f.f3;
+
+        return dst.__v2di;
+# else
+        type_union_64 sat = { .l0 = lo1  },
+                      dst = { .l0 = src3 };
+
+        dst.f.f0 = (double)dst.f.f0 + (double)sat.f.f0;
+        dst.f.f0 = (double)dst.f.f1 + (double)sat.f.f1;
+
+        return dst.l0;
+# endif
 }
 
 /* F16C is not currently supported by e2k isa.

@@ -6,6 +6,7 @@
 #define __E2K_CONST(a,i,b)             a##i##b
 #define __E2K_TEMPL(a,i,b) __E2K_CONST(a, i, b)
 #define __E2K_QN_T         __E2K_TEMPL(__f,__E2K_PS, _t)
+#define __vfmadd_ps        __E2K_TEMPL(__e2k_vfmadd_f,__E2K_PS,)
 
 /*
   Tamplate function for vec_dot_f16/f32
@@ -15,8 +16,9 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
     const __E2K_QN_T * restrict x,
     const __E2K_QN_T * restrict y
 ) {
-    float sumf = 0.0;
-    int i, k;
+    __vd vsum = ZERO, mask, venx, veny;
+
+    int i, k; 
 
 #if __E2K_PS == 32
 # define VF_L VF32_C
@@ -24,56 +26,44 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
 # define VF_L VF16_C
 #endif
 
-    const int ev = (n % VF_L),
-              nb = (n - ev);
+    unsigned mod = n % VF_L;
+    const int nb = n - mod;
 
     const __vd * restrict vx = (const __vd *)&x[0];
     const __vd * restrict vy = (const __vd *)&y[0];
 
-#if __E2K_PS == 32
-    float d0 = ev != 0 ? x[n + 0] * y[n + 0] : 0;
-# if __e2k_v__ >= 5
-    float d1 = ev >= 2 ? x[n + 1] * y[n + 1] : 0;
-    float d2 = ev == 3 ? x[n + 2] * y[n + 2] : 0;
-# endif
-#endif
-
 #pragma loop count (1000)
     for (i = 0, k = 0; i < nb; i += VF_L, k++)
     {
-#if __E2K_PS == 32
-        __vd vsum = __e2k_varith(fmuls, vx[k], vy[k]);
-#else
-        __vd vsum = __e2k_vhsat_f16_f32(vx[k], vy[k]);
-#endif
-#if __e2k_v__ >= 5
-        type_union_128 sat = { .__v2di = vsum };
-
-        sumf += sat.f.f0 + sat.f.f1 + sat.f.f2 + sat.f.f3;
-#else
-        type_union_64 sat = { .l0 = vsum };
-
-        sumf += sat.f.f0 + sat.f.f1;
-#endif
+        vsum = __vfmadd_ps(vx[k], vy[k], vsum);
+        venx = vx[k + 1];
+        veny = vy[k + 1];
     }
+    if (mod != 0) {
+        unsigned sb = __E2K_PS * mod;
+#if __e2k_v__ >= 5
+        __di lo = sb >= 64 ? MAXUL >> (sb - 64) : MAXUL,
+             hi = sb <  64 ? MAXUL >> (64 - sb) : 0;
 
-#if __E2K_PS == 16
-
-# if __e2k_v__ >= 5
-#  pragma loop count (7)
-# else
-#  pragma loop count (3)
-# endif
-    for (; i < n; i++)
-        sumf += __e2k_cvt_f16_f32(x[i]) * __e2k_cvt_f16_f32(y[i]);
+        mask = __builtin_e2k_qppackdl(lo, hi);
 #else
-    sumf += d0;
-# if __e2k_v__ >= 5
-    sumf += d1 + d2;
-# endif
+        mask = MAXUL >> sb;
+#endif
+        venx = __vfmadd_ps(
+            __e2k_vmerge(venx, ZERO, mask),
+            __e2k_vmerge(veny, ZERO, mask), vsum);
+    }
+#if __e2k_v__ >= 5
+    type_union_128 sat = { .__v2di = vsum };
+
+    return (double)sat.f.f0 + (double)sat.f.f1 +
+           (double)sat.f.f2 + (double)sat.f.f3;
+#else
+    type_union_64 sat = { .l0 = vsum };
+
+    return (double)sat.f.f0 + (double)sat.f.f1;
 #endif
 #undef VF_L
-    return sumf;
 }
 #undef __E2K_CONST
 #undef __E2K_TEMPL

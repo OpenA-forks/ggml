@@ -177,7 +177,7 @@ typedef double ggml_float;
 
 #ifdef __wasm_simd128__
 #include <wasm_simd128.h>
-#elif defined(__e2k__)
+#elif defined(__e2k__) && !defined(E2K_USE_IMM)
 // this builtins is deprecated by perfomance reasons
 # undef __F16C__
 // don't know why, but this declared globally
@@ -322,7 +322,7 @@ static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
 
 #endif // __F16C__
 
-#if defined(__e2k__)
+#if defined(__e2k__) && !defined(E2K_USE_IMM)
 # include "arch/e2k/ggml-e2k.h"
 /* at now `ggml_compute_fp*_to_fp*` functions is better choes for e2k
    but maybe future isa has changing it */
@@ -1446,7 +1446,7 @@ static void quantize_row_q8_1(const float * restrict x, void * restrict vy, int 
 #endif
     }
 #elif defined(ARCH_QUANTIZE_ROW_Q8_1)
-    ARCH_QUANTIZE_ROW_Q8_1(nb, x, y);
+    ARCH_QUANTIZE_ROW_Q8_1(nb, x, vy);
 #else
     // scalar
     quantize_row_q8_1_reference(x, y, k);
