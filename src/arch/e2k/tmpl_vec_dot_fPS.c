@@ -11,7 +11,7 @@
 /*
   Tamplate function for vec_dot_f16/f32
 */
-double __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS,)(
+double __E2K_TEMPL(__e2k_vec_dot, _f, __E2K_PS)(
     const int n,
     const __E2K_QN_T * restrict x,
     const __E2K_QN_T * restrict y

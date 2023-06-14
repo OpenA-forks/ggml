@@ -248,7 +248,7 @@ __e2k_vec_dot_q8_0_q8_0(
 
     Compiler flags: lcc (1.27.0) -O4 -ffast
 */
-#define ARCH_VEC_DOT_F16 __e2k_vec_dot_f16p
+#define ARCH_VEC_DOT_F16 __e2k_vec_dot_f16
 #undef __E2K_PS
 
 #define __E2K_PS 32
@@ -260,7 +260,7 @@ __e2k_vec_dot_q8_0_q8_0(
 
     Compiler flags: lcc (1.27.06) -O4 -ffast
 */
-#define ARCH_VEC_DOT_F32 __e2k_vec_dot_f32p
+#define ARCH_VEC_DOT_F32 __e2k_vec_dot_f32
 #undef __E2K_PS
 
 
