@@ -58,7 +58,7 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "e2k")
     option(USE_IMM "Use IA32 intrins" OFF)
 
     if(USE_IMM)
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mmmx -msse4 -mavx --mf16c -mfma")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mmmx -msse4 -mavx -mf16c -mfma")
         set(GGML_EXTRA_FLAGS ${GGML_EXTRA_FLAGS} -DE2K_USE_IMM)
     else()
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mno-mmx -mno-sse -mno-avx -mno-f16c -mno-fma")

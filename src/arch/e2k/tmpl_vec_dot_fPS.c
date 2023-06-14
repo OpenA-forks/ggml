@@ -5,18 +5,19 @@
 
 #define __E2K_CONST(a,i,b)             a##i##b
 #define __E2K_TEMPL(a,i,b) __E2K_CONST(a, i, b)
-#define __E2K_QN_T         __E2K_TEMPL(__f,__E2K_PS, _t)
-#define __vfmadd_ps        __E2K_TEMPL(__e2k_vfmadd_f,__E2K_PS,)
+#define __E2K_QN_T         __E2K_TEMPL(ggml_fp,__E2K_PS, _t)
+#define __vmadd_ps         __E2K_TEMPL(__e2k_vmadd_f,__E2K_PS,)
 
 /*
   Tamplate function for vec_dot_f16/f32
 */
-__E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
+double __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS,)(
     const int n,
     const __E2K_QN_T * restrict x,
     const __E2K_QN_T * restrict y
 ) {
-    __vd vsum = ZERO, mask, venx, veny;
+const __vd zero = __e2k_vset(0);
+      __vd vsum = zero, mask, venx, veny;
 
     int i, k; 
 
@@ -35,7 +36,7 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
 #pragma loop count (1000)
     for (i = 0, k = 0; i < nb; i += VF_L, k++)
     {
-        vsum = __vfmadd_ps(vx[k], vy[k], vsum);
+        vsum = __vmadd_ps(vx[k], vy[k], vsum);
         venx = vx[k + 1];
         veny = vy[k + 1];
     }
@@ -49,9 +50,9 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_f, __E2K_PS, p)(
 #else
         mask = MAXUL >> sb;
 #endif
-        venx = __vfmadd_ps(
-            __e2k_vmerge(venx, ZERO, mask),
-            __e2k_vmerge(veny, ZERO, mask), vsum);
+        venx = __vmadd_ps(
+            __e2k_vmerge(venx, zero, mask),
+            __e2k_vmerge(veny, zero, mask), vsum);
     }
 #if __e2k_v__ >= 5
     type_union_128 sat = { .__v2di = vsum };

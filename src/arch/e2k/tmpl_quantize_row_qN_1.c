@@ -10,7 +10,7 @@
 /*
   Tamplate function for quantize_row_q4_1/q5_1
 */
-__E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _1)(
+void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _1)(
     const int nb,
     const __vd * restrict x,
     __E2K_QN_T * restrict y
@@ -22,24 +22,10 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _1)(
 # define _EI_   0xF
 #endif
 
-#define VF_MAX 0x7F7FFFFF7F7FFFFFLL //  FLT_MAX x 2
-#define VF_MIN 0xFF7FFFFFFF7FFFFFLL // -FLT_MAX x 2
-#define _FZEH_ 0x3F0000003F000000LL // [0.5, 0.5]
-
-#if __e2k_v__ >= 5
-    const __vd vad = __builtin_e2k_qppackdl(_FZEH_, _FZEH_),
-             v4max = __builtin_e2k_qppackdl(_MAS4_, _MAS4_),
-             vfmax = __builtin_e2k_qppackdl(VF_MAX, VF_MAX),
-             vfmin = __builtin_e2k_qppackdl(VF_MIN, VF_MIN);
-#else
-    const __vd vad = _FZEH_,
-             v4max = _MAS4_,
-             vfmax = VF_MAX,
-             vfmin = VF_MIN;
-#endif
-#undef _FZEH_
-#undef VF_MAX
-#undef VF_MIN
+  const __vd vad = __e2k_vset(_V0d5f),
+           v4max = __e2k_vset(_MAS4_),
+           vfmax = __e2k_vset(VF32MAX),
+           vfmin = __e2k_vset(VF32MIN);
 
     int i, iq;
 
@@ -103,8 +89,8 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _1)(
             dmax = (dmax - dmin) / _EI_,
             dmul /= dmax;
         }
-        y[i].d = __e2k_cvt_f32_f16(dmax);
-        y[i].m = __e2k_cvt_f32_f16(dmin);
+        y[i].d = ggml_cvt_fp32_to_fp16(dmax);
+        y[i].m = ggml_cvt_fp32_to_fp16(dmin);
 
 #if __e2k_v__ >= 5
         fcmax.f.f0 = fcmax.f.f1 = fcmax.f.f2 = fcmax.f.f3 = dmul;
@@ -127,7 +113,7 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _1)(
         for (j = 0; j < QS_L; j++) {
             // Convert f32 -> i32
             vx[j] = __e2k_vcon_f32i( // (x - min) * ((max - min) / 0xF) + 0.5
-                    __e2k_vfmadd_f32(__e2k_vsub_f32(vx[j], as), am, vad));
+                    __e2k_vmadd_f32(__e2k_vsub_f32(vx[j], as), am, vad));
         }
 #pragma unroll
         for (c = 0, j = 0, k = QS_H; c < QK4_L; c++, j += 4, k += 4) {

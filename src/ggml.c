@@ -178,6 +178,7 @@ typedef double ggml_float;
 #ifdef __wasm_simd128__
 #include <wasm_simd128.h>
 #elif defined(__e2k__) && !defined(E2K_USE_IMM)
+# include "arch/e2k/ggml-e2k.h"
 // this builtins is deprecated by perfomance reasons
 # undef __F16C__
 // don't know why, but this declared globally
@@ -321,14 +322,6 @@ static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
 #define GGML_COMPUTE_FP32_TO_FP16(x) ggml_compute_fp32_to_fp16(x)
 
 #endif // __F16C__
-
-#if defined(__e2k__) && !defined(E2K_USE_IMM)
-# include "arch/e2k/ggml-e2k.h"
-/* at now `ggml_compute_fp*_to_fp*` functions is better choes for e2k
-   but maybe future isa has changing it */
-# define GGML_FP16_TO_FP32 __e2k_cvt_f16_f32
-# define GGML_FP32_TO_FP16 __e2k_cvt_f32_f16
-#endif
 
 #endif // __ARM_NEON
 

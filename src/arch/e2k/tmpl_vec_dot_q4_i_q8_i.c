@@ -15,7 +15,7 @@
    Tamplate function for vec_dot_[ q4_0_q8_0, q4_1_q8_1,
                                    q5_0_q8_0, q5_1_q8_1 ]
 */
-__E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q, __E2K_QN, __E2K_QS_I, _q8_)(
+float __E2K_TEMPL(__e2k_vec_dot_q, __E2K_QN, __E2K_QS_I, _q8_)(
     const int nb,
     const __E2K_QN_T * restrict x,
     const __E2K_Q8_T * restrict y
@@ -39,24 +39,18 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q, __E2K_QN, __E2K_QS_I, _q8_)(
 #else
 # define _BAIS_ 0x0808080808080808LL
 #endif
-
-#if __e2k_v__ >= 5
-    const __vd mas4 = __builtin_e2k_qppackdl(_MAS4_, _MAS4_),
-               bais = __builtin_e2k_qppackdl(_BAIS_, _BAIS_);
-#else
-    const __vd mas4 = _MAS4_,
-               bais = _BAIS_;
-#endif
+const __vd mas4 = __e2k_vset(_MAS4_),
+           bais = __e2k_vset(_BAIS_);
 #undef _BAIS_
 
 #pragma loop count(1000)
     for (i = 0; i < nb; i++)
     {
 #if __E2K_QS_I == 1
-        const float ms = __e2k_cvt_f16_f32(x[i].m) * y[i].s;
-        const float md = __e2k_cvt_f16_f32(x[i].d) * y[i].d;
+        const float ms = ggml_cvt_fp16_to_fp32(x[i].m) * y[i].s;
+        const float md = ggml_cvt_fp16_to_fp32(x[i].d) * y[i].d;
 #else
-        const float md = __e2k_cvt_f16_f32(x[i].d) * __e2k_cvt_f16_f32(y[i].d);
+        const float md = ggml_cvt_fp16_to_fp32(x[i].d) * ggml_cvt_fp16_to_fp32(y[i].d);
 #endif
         int sumi, j, k;
 
@@ -105,7 +99,7 @@ __E2K_INLINE float __E2K_TEMPL(__e2k_vec_dot_q, __E2K_QN, __E2K_QS_I, _q8_)(
 #endif
         sumf += md * sumi;
 #if __E2K_QS_I == 1
-        sumf += ms, bais; // just fo fix warning
+        sumf += ms, (void)bais; // just fo fix warning
 #endif
     }
     return sumf;

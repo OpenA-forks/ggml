@@ -10,7 +10,7 @@
 /*
   Tamplate function for quantize_row_q4_0/q5_0
 */
-__E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
+void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
     const int nb,
     const __vd * restrict x,
     __E2K_QN_T * restrict y
@@ -25,16 +25,9 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
 # define _QSMX_ _MAS4_
 # define _EI_   -8
 #endif
-
-#if __e2k_v__ >= 5
-    const __vd rnd = __builtin_e2k_qppackdl(_FEIH_, _FEIH_),
-             vqmax = __builtin_e2k_qppackdl(_QSMX_, _QSMX_),
-             v4max = __builtin_e2k_qppackdl(_MAS4_, _MAS4_);
-#else
-    const __vd rnd = _FEIH_,
-             vqmax = _QSMX_,
-             v4max = _MAS4_;
-#endif
+  const __vd rnd = __e2k_vset(_FEIH_),
+           vqmax = __e2k_vset(_QSMX_),
+           v4max = __e2k_vset(_MAS4_);
 #undef _FEIH_
 #undef _QSMX_
 
@@ -102,7 +95,7 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
             dmax /= _EI_,
             dmul /= dmax;
         }
-        y[i].d = __e2k_cvt_f32_f16(dmax);
+        y[i].d = ggml_cvt_fp32_to_fp16(dmax);
 
 #if __e2k_v__ >= 5
         fcm.f.f0 = fcm.f.f1 = fcm.f.f2 = fcm.f.f3 = dmul;
@@ -120,7 +113,7 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q, __E2K_QN, _0)(
 #pragma unroll
         for (j = 0; j < QS_L; j++)
             // Convert f32 -> i32 ;; x * (1.0 / d) + 8.5
-            vx[j] = __e2k_vcon_f32i(__e2k_vfmadd_f32(vx[j], am, rnd));
+            vx[j] = __e2k_vcon_f32i(__e2k_vmadd_f32(vx[j], am, rnd));
 #pragma unroll
         for (c = 0, j = 0, k = QS_H; c < QK4_L; c++, j += 4, k += 4) {
             __vd  xl, xh;

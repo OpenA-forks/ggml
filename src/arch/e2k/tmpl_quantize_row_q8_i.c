@@ -10,7 +10,7 @@
 /*
   Tamplate function for quantize_row_q8_0/q8_1
 */
-__E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q8_, __E2K_Q8_I)(
+void __E2K_TEMPL(__e2k_quantize_row_q8_, __E2K_Q8_I)(
     const int nb,
     const __vd * restrict x,
     __E2K_Q8_T * restrict y
@@ -84,7 +84,7 @@ __E2K_INLINE void __E2K_TEMPL(__e2k_quantize_row_q8_, __E2K_Q8_I)(
 
         y[i].d = dmax;
 #else
-        y[i].d = __e2k_cvt_f32_f16(dmax);
+        y[i].d = ggml_cvt_fp32_to_fp16(dmax);
 #endif
 #pragma unroll
         for (j = 0, k = 0; k < QK8_L; k++, j += 4)

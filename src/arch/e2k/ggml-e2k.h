@@ -1,14 +1,19 @@
 
 #include "ggml-e2kintrin.h"
+#include "../../ggml-f16c.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 /* Functions */
+#define GGML_FP16_TO_FP32 ggml_cvt_fp16_to_fp32
+#define GGML_FP32_TO_FP16 ggml_cvt_fp32_to_fp16
 #define ARCH_VEC_DOT_Q8_0_Q8_0 __e2k_vec_dot_q8_0_q8_0
 /* Constants */
 #define _MAS4_ 0x0F0F0F0F0F0F0F0FLL
+#define VF32MAX 0x7F7FFFFF7F7FFFFFLL //  FLT_MAX x 2
+#define VF32MIN 0xFF7FFFFFFF7FFFFFLL // -FLT_MAX x 2
 
 /*
     Sets vectors size and data types for specied e2k vers.
@@ -39,29 +44,29 @@ typedef union {
 } type_umsk_256;
 
 typedef struct {
-    __f16_t d;      // delta
+    ggml_fp16_t d;   // delta
     __vd qs[QK4_L]; // nibbles / quants
 } vd_q4_0;
 
 typedef struct {
-    __f16_t d;      // delta
-    __msk32_t qh[1];// 5-th bit of quants
+    ggml_fp16_t d;    // delta
+    __msk32_t qh[1]; // 5-th bit of quants
     __vd qs[QK4_L]; // nibbles / quants
 } vd_q5_0;
 
 typedef struct {
-    __f16_t d;      // delta
+    ggml_fp16_t d;  // delta
     __vd qs[QK8_L]; // quants
 } vd_q8_0;
 
 typedef struct {
-    __f16_t d, m;   // delta, min
+    ggml_fp16_t d, m;// delta, min
     __vd qs[QK4_L]; // nibbles / quants
 } vd_q4_1;
 
 typedef struct {
-    __f16_t d, m;   // delta, min
-    __msk32_t qh[1];// 5-th bit of quants
+    ggml_fp16_t d, m; // delta, min
+    __msk32_t qh[1]; // 5-th bit of quants
     __vd qs[QK4_L]; // nibbles / quants
 } vd_q5_1;
 
@@ -136,7 +141,7 @@ __e2k_vec_dot_q8_0_q8_0(
 #pragma loop count(1000)
     for (i = 0; i < nb; i++)
     {
-        float fm = __e2k_cvt_f16_f32(x[i].d) * __e2k_cvt_f16_f32(y[i].d);
+        float fm = ggml_cvt_fp16_to_fp32(x[i].d) * ggml_cvt_fp16_to_fp32(y[i].d);
         int sumi, j;
 /*
     Wide instructions per iteration:
